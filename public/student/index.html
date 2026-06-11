@@ -145,24 +145,20 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
   </div>
 </div>
 
-<!-- Page 3: 危机事件 -->
-<div id="page-crisis" class="page">
-  <div class="crisis-overlay"></div>
-  <div id="crisis-modal-wrap">
-    <div class="crisis-modal" id="crisis-modal">
-      <h2>⚠️ 突发危机</h2>
-      <p id="crisis-text">外卖抽成上调10%！请立刻在架构中增设「私域流量运营组」，否则系统将在60秒后自动判定破产！</p>
-      <div class="timer" id="crisis-timer">60</div>
-      <div class="timer-bar"><div class="timer-bar-fill" id="timer-fill" style="width:100%"></div></div>
-    </div>
-  </div>
-  <div class="topo-header" style="position:absolute;bottom:0;left:0;right:0;z-index:70">
-    <div class="topo-stats">
-      <span class="label">剩余</span><span class="val" id="stat-remain-c">5</span>
-      <span class="label">| 群组</span><span class="val" id="stat-groups-c">0</span>
-    </div>
+<!-- Page 3: 危机事件（叠加在拓扑页上，不切页面） -->
+<div id="crisis-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:rgba(255,23,68,0.08);pointer-events:none"></div>
+<div id="crisis-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1E1E1E;border:2px solid #FF1744;border-radius:16px;padding:24px;text-align:center;z-index:101;width:85%;max-width:340px">
+  <h2 style="color:#FF1744;font-size:20px;margin-bottom:8px">⚠️ 突发危机</h2>
+  <p style="color:#ccc;font-size:14px;line-height:1.6;margin-bottom:12px">外卖抽成上调10%！请立刻在架构中增设「私域流量运营组」并分配≥2人，否则系统将在60秒后自动判定破产！</p>
+  <div class="timer" id="crisis-timer">60</div>
+  <div class="timer-bar"><div class="timer-bar-fill" id="timer-fill" style="width:100%"></div></div>
+</div>
+<div id="crisis-bar" style="display:none;position:absolute;top:0;left:0;right:0;z-index:90;padding:6px 12px;background:rgba(30,30,30,0.95);border-bottom:2px solid #FF1744;display:none;align-items:center;gap:10px">
+  <span style="color:#FF1744;font-size:13px;font-weight:700">⏱ 危机倒计时</span>
+  <span class="timer" id="crisis-timer2" style="font-size:24px;margin:0">60</span>
+  <span style="margin-left:auto">
     <button class="btn-sm btn-crisis" onclick="submitCrisis()">提交架构推演</button>
-  </div>
+  </span>
 </div>
 
 <!-- 等待页 -->
@@ -575,19 +571,14 @@ async function submitArchitecture() {
 let crisisCanvasInterval = null;
 
 function triggerCrisis() {
+  if (hasCrisis) return;
   hasCrisis = true;
   crisisSeconds = 60;
-  showPage('page-crisis');
   
-  // 复制当前拓扑到危机页的 canvas
-  document.getElementById('crisis-canvas-area').innerHTML = '';
-  const crisisCanvas = document.getElementById('topo-canvas').cloneNode(true);
-  crisisCanvas.id = 'crisis-canvas';
-  document.getElementById('crisis-canvas-area').appendChild(crisisCanvas);
-  
-  // 更新统计
-  updateCrisisStats();
-  crisisCanvasInterval = setInterval(updateCrisisStats, 2000);
+  // 显示危机弹窗
+  document.getElementById('crisis-overlay').style.display = 'block';
+  document.getElementById('crisis-popup').style.display = 'block';
+  document.getElementById('crisis-bar').style.display = 'flex';
   
   // 倒计时
   updateCrisisTimer();
@@ -596,37 +587,39 @@ function triggerCrisis() {
     updateCrisisTimer();
     if (crisisSeconds <= 0) {
       clearInterval(crisisTimer);
-      if (crisisCanvasInterval) clearInterval(crisisCanvasInterval);
       submitCrisis();
     }
   }, 1000);
   
-  // 2秒后收起模态框
+  // 2秒后收起弹窗，保留顶栏
   setTimeout(() => {
-    document.getElementById('crisis-modal').style.display = 'none';
+    document.getElementById('crisis-popup').style.display = 'none';
   }, 2000);
 }
 
 function updateCrisisTimer() {
-  const el = document.getElementById('crisis-timer');
+  const els = ['crisis-timer', 'crisis-timer2'];
+  els.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = crisisSeconds;
+  });
   const fill = document.getElementById('timer-fill');
-  el.textContent = crisisSeconds;
-  fill.style.width = (crisisSeconds / 60 * 100) + '%';
-  if (crisisSeconds <= 10) {
-    el.classList.add('urgent');
-  } else {
-    el.classList.remove('urgent');
+  if (fill) fill.style.width = (crisisSeconds / 60 * 100) + '%';
+  
+  const timerEl = document.getElementById('crisis-timer');
+  if (timerEl) {
+    if (crisisSeconds <= 10) timerEl.classList.add('urgent');
+    else timerEl.classList.remove('urgent');
   }
-}
-
-function updateCrisisStats() {
-  document.getElementById('stat-remain-c').textContent = 15 - nodes.filter(n => n.type === 'staff').length;
-  document.getElementById('stat-groups-c').textContent = groups.length;
+  const timer2El = document.getElementById('crisis-timer2');
+  if (timer2El) {
+    if (crisisSeconds <= 10) timer2El.classList.add('urgent');
+    else timer2El.classList.remove('urgent');
+  }
 }
 
 async function submitCrisis() {
   if (crisisTimer) clearInterval(crisisTimer);
-  if (crisisCanvasInterval) clearInterval(crisisCanvasInterval);
   
   const arch = buildArchitectureJSON();
   showPage('page-waiting');
@@ -643,11 +636,9 @@ async function submitCrisis() {
       setTimeout(() => showResult(data), 1500);
     } else {
       toast(data.error || '提交失败');
-      showPage('page-crisis');
     }
   } catch (e) {
     toast('网络错误');
-    showPage('page-crisis');
   }
 }
 
@@ -707,9 +698,6 @@ window.addEventListener('resize', () => {
   }
 });
 
-// 初始化时在危机页也渲染拓扑
-document.getElementById('page-crisis').insertAdjacentHTML('afterbegin', 
-  '<div class="canvas-wrap" id="crisis-canvas-area" style="flex:1"></div>');
 </script>
 </body>
 </html>
