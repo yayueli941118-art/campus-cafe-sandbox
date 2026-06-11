@@ -19,12 +19,22 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 .btn-mock.on{background:rgba(0,229,255,0.15);color:#00E5FF;border-color:rgba(0,229,255,0.3)}
 .btn-crisis{background:rgba(255,23,68,0.15);color:#FF1744;border:1px solid rgba(255,23,68,0.3)}
 .btn-reset{background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.1)}
+.btn-reset{background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.1)}
+
+/* 相位指示灯 */
+.phase-light{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;transition:all .3s;opacity:0.35}
+.phase-light.active{opacity:1;background:rgba(0,229,255,0.08)}
+.phase-dot{width:8px;height:8px;border-radius:50%;background:#555;transition:all .3s}
+.phase-light.active .phase-dot{background:#00E5FF;box-shadow:0 0 10px rgba(0,229,255,0.6)}
+.phase-light.active .phase-label{color:#00E5FF}
+.phase-label{font-size:11px;color:#555;transition:all .3s}
+
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
 .status-dot.on{background:#00E5FF;box-shadow:0 0 8px rgba(0,229,255,0.5)}
 .status-dot.off{background:#666}
 
 /* 主体布局 */
-.main{display:flex;flex:1;height:calc(100vh - 50px)}
+.main{display:flex;flex:1;height:calc(100vh - 50px - 56px)}
 .panel{position:relative;overflow:hidden}
 .panel-left{width:40%;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column}
 .panel-right{width:60%;display:flex;flex-direction:column}
@@ -58,15 +68,38 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 <body>
 
 <div class="nav-bar">
-  <div class="nav-item">01 理论导入</div>
-  <div class="nav-item">02 案例解析</div>
-  <div class="nav-item active">03 沙盘实战 ◆</div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <span style="font-size:20px">☕</span>
+    <span style="font-size:13px;color:#aaa;font-weight:600">咖啡馆敏捷架构沙盘</span>
+  </div>
+  <!-- 相位指示灯 -->
+  <div style="display:flex;align-items:center;gap:4px;margin-left:32px" id="phase-lights">
+    <div class="phase-light" data-phase="building"><span class="phase-dot"></span><span class="phase-label">架构搭建</span></div>
+    <span style="color:#333;margin:0 2px">▸</span>
+    <div class="phase-light" data-phase="crisis"><span class="phase-dot"></span><span class="phase-label">压力测试</span></div>
+    <span style="color:#333;margin:0 2px">▸</span>
+    <div class="phase-light" data-phase="verdict"><span class="phase-dot"></span><span class="phase-label">判定公布</span></div>
+  </div>
   <div class="nav-right">
     <span><span class="status-dot on" id="status-dot"></span><span id="status-text" style="font-size:12px;color:#888">在线</span></span>
-    <span style="font-size:12px;color:#666">已提交: <span id="submit-count" style="color:#00E5FF">0</span></span>
     <button class="btn-nav btn-mock" id="btn-mock" onclick="toggleMock()">🎭 Mock演示</button>
-    <button class="btn-nav btn-crisis" onclick="triggerCrisis()">⚡ 触发危机</button>
     <button class="btn-nav btn-reset" onclick="resetAll()">↻ 重置</button>
+  </div>
+</div>
+
+<!-- 班级状态 + 危机大按钮 -->
+<div style="display:flex;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(255,255,255,0.04)">
+  <!-- 班级摘要 -->
+  <div style="display:flex;gap:16px;font-size:11px">
+    <div style="text-align:center"><div style="color:#888">已入场</div><div style="color:#fff;font-weight:700;font-size:16px" id="stat-joined">0</div></div>
+    <div style="text-align:center"><div style="color:#888">已提交</div><div style="color:#00E5FF;font-weight:700;font-size:16px" id="stat-submitted">0</div></div>
+    <div style="text-align:center"><div style="color:#888">🟢 存活</div><div style="color:#00E5FF;font-weight:700;font-size:16px" id="stat-survived">0</div></div>
+    <div style="text-align:center"><div style="color:#888">🔴 破产</div><div style="color:#FF1744;font-weight:700;font-size:16px" id="stat-bankrupt">0</div></div>
+  </div>
+  <!-- 危机大按钮 -->
+  <div id="crisis-banner" style="margin-left:auto;background:linear-gradient(135deg,rgba(255,23,68,0.2),rgba(255,23,68,0.05));border:2px solid rgba(255,23,68,0.4);border-radius:10px;padding:8px 20px;cursor:pointer;text-align:center;transition:all .2s" onclick="triggerCrisis()">
+    <div style="font-size:14px;color:#FF1744;font-weight:700">⚡ 外卖平台抽成上调！</div>
+    <div style="font-size:10px;color:rgba(255,23,68,0.7)">点击触发 · 学生端60秒倒计时</div>
   </div>
 </div>
 
@@ -132,14 +165,41 @@ const radarOption = {
   }]
 };
 
-// 散点图配置
+// 散点图配置 (含象限参考线)
 const scatterOption = {
-  grid: { top: 50, right: 30, bottom: 40, left: 50 },
-  xAxis: { name: '群组数量', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } } },
-  yAxis: { name: '平均管理幅度', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } } },
+  grid: { top: 50, right: 30, bottom: 40, left: 55 },
+  xAxis: { 
+    name: '群组数量', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, 
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } },
+    min: 0, max: 8
+  },
+  yAxis: { 
+    name: '平均管理幅度', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, 
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } },
+    min: 0, max: 12, inverse: true
+  },
   series: [
     { type: 'scatter', symbolSize: 18, data: [], itemStyle: { color: '#00E5FF' }, 
-      label: { show: true, formatter: p => p.value[2], fontSize: 9, color: '#ccc', position: 'top' } }
+      label: { show: true, formatter: p => p.value[2], fontSize: 9, color: '#ccc', position: 'top' },
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        label: { color: '#555', fontSize: 9, formatter: p => p.name },
+        lineStyle: { color: 'rgba(255,255,255,0.12)', type: 'dashed', width: 1 },
+        data: [
+          { xAxis: 3, name: '≥3组', label: { formatter: '≥3组', position: 'end' } },
+          { yAxis: 3, name: '幅度≤3', label: { formatter: '安全线', position: 'start' } }
+        ]
+      },
+      // 象限着色区域
+      markArea: {
+        silent: true,
+        data: [
+          [{ xAxis: 3, yAxis: 3 }, { xAxis: 8, yAxis: 0 }, { itemStyle: { color: 'rgba(0,229,255,0.04)' }, label: { show: true, color: 'rgba(0,229,255,0.2)', fontSize: 9, position: 'insideTopRight', formatter: '矩阵重组区' } }],
+          [{ xAxis: 0, yAxis: 3 }, { xAxis: 3, yAxis: 12 }, { itemStyle: { color: 'rgba(255,23,68,0.04)' }, label: { show: true, color: 'rgba(255,23,68,0.2)', fontSize: 9, position: 'insideBottomLeft', formatter: '直线制崩溃区' } }]
+        ]
+      }
+    }
   ]
 };
 
@@ -197,9 +257,12 @@ function connectWS() {
 
 // 改用轮询作为主要数据获取方式（兼容 Socket.io）
 let pollingInterval = null;
+let summaryInterval = null;
+
 function startPolling() {
+  // 主数据轮询
   pollingInterval = setInterval(async () => {
-    if (mockRunning) return; // Mock 模式下跳过轮询
+    if (mockRunning) return;
     try {
       const res = await fetch('/api/dashboard/snapshot');
       const data = await res.json();
@@ -208,12 +271,36 @@ function startPolling() {
       }
     } catch {}
   }, 2000);
+  
+  // 相位 + 班级摘要轮询
+  summaryInterval = setInterval(async () => {
+    try {
+      const [phaseRes, summaryRes] = await Promise.all([
+        fetch('/api/phase'),
+        fetch('/api/teams/summary')
+      ]);
+      updatePhaseLights((await phaseRes.json()).phase);
+      updateSummary(await summaryRes.json());
+    } catch {}
+  }, 2000);
+}
+
+function updatePhaseLights(phase) {
+  document.querySelectorAll('.phase-light').forEach(el => {
+    el.classList.toggle('active', el.dataset.phase === phase);
+  });
+}
+
+function updateSummary(data) {
+  if (!data) return;
+  document.getElementById('stat-joined').textContent = data.joined || 0;
+  document.getElementById('stat-submitted').textContent = data.submitted || 0;
+  document.getElementById('stat-survived').textContent = data.survived || 0;
+  document.getElementById('stat-bankrupt').textContent = data.bankrupt || 0;
 }
 
 function updateDashboard(teams, avgRadar) {
   if (!teams || teams.length === 0) return;
-  
-  document.getElementById('submit-count').textContent = teams.length;
   
   // 更新雷达图
   if (avgRadar) {
@@ -245,7 +332,7 @@ function updateDashboard(teams, avgRadar) {
     series: [{ data: scatterData.map(d => ({
       value: [d.value[0], d.value[1], d.value[2]],
       itemStyle: d.itemStyle
-    })) }]
+    })), markLine: scatterOption.series[0].markLine, markArea: scatterOption.series[0].markArea }]
   });
   
   // 更新战报
@@ -384,25 +471,47 @@ function startMockLocal() {
     // 更新图表
     updateDashboard([...Object.values(demolishData)], radar);
     
+    // 更新摘要面板
+    const teams = Object.values(demolishData);
+    updateSummary({
+      joined: teams.length,
+      submitted: teams.filter(t => t.verdict).length,
+      survived: teams.filter(t => t.verdict === 'survive').length,
+      bankrupt: teams.filter(t => t.verdict === 'bankrupt').length
+    });
+    updatePhaseLights('building');
+    
     mockIdx++;
   }, 2500);
 }
 
 function stopMockLocal() {
   if (mockInterval) { clearInterval(mockInterval); mockInterval = null; }
-  // 清空 Mock 数据，恢复空状态等待真实提交
   battleLogs = [];
   demolishData = {};
   scatterData = [];
   document.getElementById('battle-log-inner').innerHTML = '';
-  document.getElementById('submit-count').textContent = '0';
+  updateSummary({ joined: 0, submitted: 0, survived: 0, bankrupt: 0 });
   radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
-  scatterChart.setOption({ series: [{ data: [] }] });
+  scatterChart.setOption({ series: [{ data: [], markLine: scatterOption.series[0].markLine, markArea: scatterOption.series[0].markArea }] });
 }
 
 async function triggerCrisis() {
+  // 大屏闪红效果
+  const banner = document.getElementById('crisis-banner');
+  banner.style.boxShadow = '0 0 40px rgba(255,23,68,0.6)';
+  banner.style.transform = 'scale(1.03)';
+  setTimeout(() => {
+    banner.style.boxShadow = '';
+    banner.style.transform = '';
+  }, 600);
+  
   try {
-    await fetch('/api/admin/crisis', { method: 'POST' });
+    const res = await fetch('/api/admin/crisis', { method: 'POST' });
+    if (res.ok) {
+      // 相位自动更新
+      updatePhaseLights('crisis');
+    }
   } catch {}
 }
 
@@ -412,9 +521,10 @@ async function resetAll() {
   demolishData = {};
   scatterData = [];
   document.getElementById('battle-log-inner').innerHTML = '';
-  document.getElementById('submit-count').textContent = '0';
+  updateSummary({ joined: 0, submitted: 0, survived: 0, bankrupt: 0 });
+  updatePhaseLights('building');
   radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
-  scatterChart.setOption({ series: [{ data: [] }] });
+  scatterChart.setOption({ series: [{ data: [], markLine: scatterOption.series[0].markLine, markArea: scatterOption.series[0].markArea }] });
 }
 
 // ==================== 初始化 ====================

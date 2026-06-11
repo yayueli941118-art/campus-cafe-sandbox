@@ -20,6 +20,11 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// 全局相位状态
+let currentPhase = 'building'; // building | crisis | verdict
+// 已入场团队（简化为内存计数，真实用db.submissions）
+let joinedTeams = 0;
+
 // ==================== REST API ====================
 
 // 初始化团队
@@ -30,6 +35,7 @@ app.post('/api/team/init', (req, res) => {
 
   const teamId = uuidv4();
   db.createTeam(teamId, team_name, leader);
+  joinedTeams++;
 
   // 构建初始架构：1店长 + 10员工，直线制
   const staffPool = [];
@@ -127,8 +133,39 @@ app.post('/api/admin/reset', (req, res) => {
 let activeCrisis = null;
 app.post('/api/admin/crisis', (req, res) => {
   activeCrisis = { crisis_type: 'platform_fee', triggered_at: Date.now() };
+  currentPhase = 'crisis';
   io.emit('CRISIS_TRIGGER', { crisis_type: 'platform_fee', duration_seconds: 60 });
   res.json({ ok: true, message: '危机已触发' });
+});
+
+// 相位管理
+app.get('/api/phase', (req, res) => {
+  res.json({ phase: currentPhase });
+});
+
+app.post('/api/phase', (req, res) => {
+  const { phase } = req.body;
+  if (!['building', 'crisis', 'verdict'].includes(phase)) {
+    return res.status(400).json({ error: '无效相位' });
+  }
+  currentPhase = phase;
+  if (phase === 'crisis') {
+    activeCrisis = { crisis_type: 'platform_fee', triggered_at: Date.now() };
+    io.emit('CRISIS_TRIGGER', { crisis_type: 'platform_fee', duration_seconds: 60 });
+  }
+  io.emit('PHASE_CHANGE', { phase });
+  res.json({ ok: true, phase });
+});
+
+// 班级摘要
+app.get('/api/teams/summary', (req, res) => {
+  const subs = db.getSubmittedTeams() || [];
+  res.json({
+    joined: Math.max(joinedTeams, subs.length),
+    submitted: subs.length,
+    survived: subs.filter(t => t.verdict === 'survive').length,
+    bankrupt: subs.filter(t => t.verdict === 'bankrupt').length
+  });
 });
 
 // 查询是否有机（学生端轮询）
