@@ -25,7 +25,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 /* Page 2: 拓扑编辑 */
 #page-topo{background:#121212}
 .topo-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(0,229,255,0.08);border-bottom:1px solid rgba(0,229,255,0.12)}
-.hint-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,193,7,0.08);border-bottom:1px solid rgba(255,193,7,0.15);font-size:12px;color:#FFC107;animation:fadeOut 6s forwards}
+.hint-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,193,7,0.08);border-bottom:1px solid rgba(255,193,7,0.15);font-size:12px;color:#FFC107}
 @keyframes fadeOut{0%,70%{opacity:1}100%{opacity:0;height:0;padding:0;border:none;overflow:hidden}}
 .hint-bar .step{display:inline-flex;align-items:center;gap:4px;background:rgba(255,193,7,0.12);padding:2px 8px;border-radius:10px;font-size:11px}
 .hint-bar .step .num{width:16px;height:16px;background:#FFC107;color:#121212;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
@@ -242,8 +242,6 @@ async function joinGame() {
       edges = []; // 清除直线边，等学生拖入后再建边
     }
     renderTopology();
-    // 6秒后自动隐藏引导条
-    setTimeout(() => { const h = document.getElementById('hint-bar'); if (h) h.style.display = 'none'; }, 8000);
   } catch (e) {
     toast('网络错误，请重试');
     btn.disabled = false;
@@ -396,6 +394,9 @@ document.addEventListener('touchend', e => {
     const g = groups.find(g => g.id === gid);
     if (g) {
       n.group_id = gid;
+      // 第一次拖成功 → 隐藏引导条
+      const hint = document.getElementById('hint-bar');
+      if (hint) hint.style.display = 'none';
       // 移除旧边，添加店长→群组的边
       edges = edges.filter(e => !(e.to === n.id));
       if (!edges.find(e => e.from === 'shop_manager' && e.to === gid)) {
