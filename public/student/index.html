@@ -118,14 +118,13 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 <div id="page-topo" class="page">
   <div class="topo-header">
     <div class="topo-stats">
-      <span class="label">编制</span><span class="val" id="stat-total">15</span>
-      <span class="label">| 已分配</span><span class="val" id="stat-assigned">10</span>
-      <span class="label">| 剩余</span><span class="val" id="stat-remain">5</span>
-      <span class="label">| 店长幅度</span><span class="val" id="stat-span">10</span>
-      <span class="label">群组</span><span class="val" id="stat-groups">0</span>
+      <span class="label">店长幅度</span><span class="val" id="stat-span" style="font-size:18px;padding:2px 8px;border-radius:6px;background:rgba(255,23,68,0.2)">10</span>
+      <span class="label" style="margin-left:8px">群组</span><span class="val" id="stat-groups">0</span>
+      <span class="label" style="margin-left:8px">剩余</span><span class="val" id="stat-remain">5</span>
     </div>
     <div class="topo-actions">
       <button class="btn-sm btn-add-group" onclick="addGroup()">+ 新建群组</button>
+      <button class="btn-sm" style="background:rgba(255,255,255,0.08);color:#aaa" onclick="resetTopo()">↺ 重置</button>
       <button class="btn-sm btn-submit" id="btn-submit-topo" onclick="submitArchitecture()">提交架构推演</button>
     </div>
   </div>
@@ -138,6 +137,15 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
   <div class="canvas-wrap" id="canvas-wrap">
     <div id="topo-canvas">
       <svg id="edge-svg"></svg>
+      <!-- 情景提示：店长下方 -->
+      <div id="situational-hint" style="position:absolute;left:50%;top:80px;transform:translateX(-50%);font-size:10px;color:#666;text-align:center;pointer-events:none;z-index:5">10个员工全向你汇报…<br>你连喝水的时间都没有 💧</div>
+      <!-- 目标面板 -->
+      <div id="target-panel" style="position:absolute;right:4px;top:4px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 8px;font-size:10px;z-index:15;pointer-events:none;max-width:130px">
+        <div style="color:#00E5FF;font-weight:700;margin-bottom:3px">🎯 存活条件</div>
+        <div id="tgt-span" style="color:#FF1744">🔴 幅度≤3（当前10）</div>
+        <div id="tgt-groups" style="color:#666">⏳ ≥3个群组</div>
+        <div id="tgt-siyu" style="color:#666">⏳ 私域运营组</div>
+      </div>
     </div>
     <div class="unassigned-area" id="unassigned-area">
       <span class="unassigned-label">未分配员工</span>
@@ -487,17 +495,64 @@ function updateStats() {
   const remain = 15 - staffCount;
   const shopSpan = calcShopSpan();
   
-  document.getElementById('stat-total').textContent = '15';
-  document.getElementById('stat-assigned').textContent = assignedStaff;
   document.getElementById('stat-remain').textContent = remain;
-  document.getElementById('stat-span').textContent = shopSpan;
   document.getElementById('stat-groups').textContent = groups.length;
   
-  // 剩余少于3或管理幅度超8警告
+  // 店长幅度：颜色 + 背景实时反馈
+  const spanEl = document.getElementById('stat-span');
+  spanEl.textContent = shopSpan;
+  if (shopSpan > 8) {
+    spanEl.style.color = '#FF1744'; 
+    spanEl.style.background = 'rgba(255,23,68,0.2)';
+  } else if (shopSpan > 3) {
+    spanEl.style.color = '#FFC107';
+    spanEl.style.background = 'rgba(255,193,7,0.15)';
+  } else {
+    spanEl.style.color = '#00E5FF';
+    spanEl.style.background = 'rgba(0,229,255,0.12)';
+  }
+  
+  // 更新目标面板
+  const tgtSpan = document.getElementById('tgt-span');
+  if (shopSpan <= 3) {
+    tgtSpan.innerHTML = '✅ 幅度≤3（当前' + shopSpan + '）';
+    tgtSpan.style.color = '#00E5FF';
+  } else if (shopSpan <= 8) {
+    tgtSpan.innerHTML = '🟡 幅度≤3（当前' + shopSpan + '）';
+    tgtSpan.style.color = '#FFC107';
+  } else {
+    tgtSpan.innerHTML = '🔴 幅度≤3（当前' + shopSpan + '）';
+    tgtSpan.style.color = '#FF1744';
+  }
+  
+  const tgtGroups = document.getElementById('tgt-groups');
+  if (groups.length >= 3) {
+    tgtGroups.innerHTML = '✅ ≥3个群组（当前' + groups.length + '）';
+    tgtGroups.style.color = '#00E5FF';
+  } else {
+    tgtGroups.innerHTML = '⏳ ≥3个群组（当前' + groups.length + '）';
+    tgtGroups.style.color = '#666';
+  }
+  
+  // 隐藏情景提示（如果有员工被分配了）
+  const hint = document.getElementById('situational-hint');
+  if (hint && assignedStaff > 0) {
+    hint.style.display = 'none';
+  }
+  
+  // 剩余少于3警告
   const remainEl = document.getElementById('stat-remain');
   remainEl.className = remain < 3 ? 'warn' : 'val';
-  const spanEl = document.getElementById('stat-span');
-  spanEl.className = shopSpan > 8 ? 'warn' : 'val';
+}
+
+function resetTopo() {
+  if (hasCrisis && crisisSeconds > 0) return; // 危机中不能重置
+  nodes.forEach(n => { if (n.type === 'staff') n.group_id = null; });
+  edges = [];
+  groups = [];
+  document.getElementById('hint-bar').style.display = 'flex';
+  document.getElementById('situational-hint').style.display = 'block';
+  renderTopology();
 }
 
 function calcShopSpan() {
@@ -549,6 +604,26 @@ function buildArchitectureJSON() {
 }
 
 async function submitArchitecture() {
+  const shopSpan = calcShopSpan();
+  const gc = groups.length;
+  
+  // 提交前预览：预估生存率
+  let estRate = 60;
+  let estMsg = '';
+  if (shopSpan > 8) { estRate = 40; estMsg = '⚠️ 管理幅度击穿！'; }
+  else if (gc >= 3 && shopSpan <= 3) { estRate = 85; estMsg = '✅ 矩阵重组优秀'; }
+  else { estRate = 60; estMsg = '🟡 基础存活线'; }
+  
+  const confirm = window.confirm(
+    '📊 提交预览\n\n' +
+    '店长幅度：' + shopSpan + ' (' + (shopSpan<=3?'🟢':shopSpan<=8?'🟡':'🔴') + ')\n' +
+    '群组数量：' + gc + ' 个\n' +
+    '预估生存率：约 ' + estRate + '%\n' +
+    '判定：' + estMsg + '\n\n' +
+    '确定提交？'
+  );
+  if (!confirm) return;
+  
   const arch = buildArchitectureJSON();
   try {
     const res = await fetch('/api/team/submit', {
