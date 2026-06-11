@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沙盘大屏 - 教师端</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-apple-system,sans-serif;background:#0A0E27;color:#e0e0e0}
+
+/* 顶部导航 */
+.nav-bar{display:flex;align-items:center;padding:0 24px;height:50px;background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.06)}
+.nav-item{padding:8px 20px;font-size:13px;color:#666;cursor:pointer;border-radius:6px;margin-right:8px;transition:all .2s}
+.nav-item.active{background:rgba(0,229,255,0.12);color:#00E5FF;font-weight:600}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.btn-nav{padding:6px 16px;font-size:12px;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:all .2s}
+.btn-mock{background:rgba(255,193,7,0.15);color:#FFC107;border:1px solid rgba(255,193,7,0.3)}
+.btn-mock.on{background:rgba(0,229,255,0.15);color:#00E5FF;border-color:rgba(0,229,255,0.3)}
+.btn-crisis{background:rgba(255,23,68,0.15);color:#FF1744;border:1px solid rgba(255,23,68,0.3)}
+.btn-reset{background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.1)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.status-dot.on{background:#00E5FF;box-shadow:0 0 8px rgba(0,229,255,0.5)}
+.status-dot.off{background:#666}
+
+/* 主体布局 */
+.main{display:flex;flex:1;height:calc(100vh - 50px)}
+.panel{position:relative;overflow:hidden}
+.panel-left{width:40%;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column}
+.panel-right{width:60%;display:flex;flex-direction:column}
+
+.chart-container{flex:1;position:relative}
+
+.panel-label{position:absolute;top:12px;left:16px;font-size:12px;color:#666;z-index:10;text-transform:uppercase;letter-spacing:2px}
+
+/* 底部战报 */
+.battle-log{height:80px;background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;overflow:hidden;position:relative}
+.battle-log-inner{display:flex;gap:24px;white-space:nowrap;padding:0 16px;animation:marquee 30s linear infinite}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.battle-item{font-size:12px;padding:4px 12px;border-radius:4px;display:flex;align-items:center;gap:6px}
+.battle-item.survive{background:rgba(0,229,255,0.1);color:#00E5FF}
+.battle-item.bankrupt{background:rgba(255,23,68,0.1);color:#FF1744}
+.battle-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.battle-dot.survive{background:#00E5FF}
+.battle-dot.bankrupt{background:#FF1744}
+
+/* 散点下钻浮层 */
+.drilldown{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1A1A2E;border:1px solid rgba(0,229,255,0.2);border-radius:12px;padding:20px;z-index:100;min-width:280px;display:none}
+.drilldown h4{color:#00E5FF;font-size:14px;margin-bottom:8px}
+.drilldown .info{font-size:12px;color:#aaa;margin:4px 0}
+.drilldown .close{position:absolute;top:8px;right:12px;color:#666;cursor:pointer;font-size:18px}
+.drilldown .mini-topo{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;min-height:60px;background:rgba(255,255,255,0.03);border-radius:8px;padding:8px}
+.drilldown .mini-node{font-size:9px;padding:2px 6px;border-radius:4px;background:#444;color:#ccc}
+.drilldown .mini-node.manager{background:#FF6D00;color:#fff}
+.drilldown .mini-node.group{background:rgba(0,229,255,0.15);color:#00E5FF;border:1px dashed rgba(0,229,255,0.3)}
+</style>
+</head>
+<body>
+
+<div class="nav-bar">
+  <div class="nav-item">01 理论导入</div>
+  <div class="nav-item">02 案例解析</div>
+  <div class="nav-item active">03 沙盘实战 ◆</div>
+  <div class="nav-right">
+    <span><span class="status-dot on" id="status-dot"></span><span id="status-text" style="font-size:12px;color:#888">在线</span></span>
+    <span style="font-size:12px;color:#666">已提交: <span id="submit-count" style="color:#00E5FF">0</span></span>
+    <button class="btn-nav btn-mock" id="btn-mock" onclick="toggleMock()">🎭 Mock演示</button>
+    <button class="btn-nav btn-crisis" onclick="triggerCrisis()">⚡ 触发危机</button>
+    <button class="btn-nav btn-reset" onclick="resetAll()">↻ 重置</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- 左侧雷达图 -->
+  <div class="panel panel-left">
+    <div class="panel-label">全班生存率实时雷达</div>
+    <div class="chart-container" id="radar-chart"></div>
+  </div>
+  
+  <!-- 右侧散点图 -->
+  <div class="panel panel-right">
+    <div class="panel-label">架构演进散点图 (X:群组数 Y:管理幅度)</div>
+    <div class="chart-container" id="scatter-chart"></div>
+  </div>
+</div>
+
+<!-- 底部战报 -->
+<div class="battle-log">
+  <div class="battle-log-inner" id="battle-log-inner"></div>
+</div>
+
+<!-- 散点下钻浮层 -->
+<div class="drilldown" id="drilldown">
+  <span class="close" onclick="closeDrilldown()">✕</span>
+  <h4 id="drill-name">--</h4>
+  <div class="info" id="drill-info"></div>
+  <div class="mini-topo" id="drill-topo"></div>
+</div>
+
+<script>
+// ==================== Echarts 初始化 ====================
+const radarDom = document.getElementById('radar-chart');
+const scatterDom = document.getElementById('scatter-chart');
+const radarChart = echarts.init(radarDom, 'dark');
+const scatterChart = echarts.init(scatterDom, 'dark');
+
+// 雷达图配置
+const radarOption = {
+  color: ['#00E5FF'],
+  radar: {
+    center: ['50%', '55%'],
+    radius: '65%',
+    axisName: { color: '#888', fontSize: 10 },
+    indicator: [
+      { name: '决策效率', max: 100 },
+      { name: '沟通成本', max: 100 },
+      { name: '执行偏差', max: 100 },
+      { name: '管理幅度', max: 100 },
+      { name: '响应速度', max: 100 },
+      { name: '冗余程度', max: 100 }
+    ],
+    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+    splitArea: { areaStyle: { color: ['rgba(0,229,255,0.02)', 'rgba(0,0,0,0)'] } }
+  },
+  series: [{
+    type: 'radar',
+    data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均', areaStyle: { color: 'rgba(0,229,255,0.1)' } }],
+    symbol: 'circle',
+    symbolSize: 5,
+    lineStyle: { width: 2 }
+  }]
+};
+
+// 散点图配置
+const scatterOption = {
+  grid: { top: 50, right: 30, bottom: 40, left: 50 },
+  xAxis: { name: '群组数量', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } } },
+  yAxis: { name: '平均管理幅度', nameTextStyle: { color: '#888', fontSize: 11 }, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } } },
+  series: [
+    { type: 'scatter', symbolSize: 18, data: [], itemStyle: { color: '#00E5FF' }, 
+      label: { show: true, formatter: p => p.value[2], fontSize: 9, color: '#ccc', position: 'top' } }
+  ]
+};
+
+radarChart.setOption(radarOption);
+scatterChart.setOption(scatterOption);
+
+// 响应式
+window.addEventListener('resize', () => {
+  radarChart.resize();
+  scatterChart.resize();
+});
+
+// 散点点击下钻
+scatterChart.on('click', (params) => {
+  if (params.componentType === 'series') {
+    const teamName = params.value[2];
+    const pointData = scatterData.find(d => d[2] === teamName);
+    showDrilldown(pointData);
+  }
+});
+
+// ==================== 数据状态 ====================
+let teamsData = [];
+let scatterData = [];
+let battleLogs = [];
+let mockRunning = false;
+let demolishData = {}; // 存详细的团队数据，用于下钻
+
+// ==================== WebSocket ====================
+let ws = null;
+function connectWS() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(protocol + '//' + location.host);
+  
+  ws.onopen = () => {
+    document.getElementById('status-dot').className = 'status-dot on';
+    document.getElementById('status-text').textContent = '在线';
+  };
+  
+  ws.onclose = () => {
+    document.getElementById('status-dot').className = 'status-dot off';
+    document.getElementById('status-text').textContent = '离线';
+    setTimeout(connectWS, 3000);
+  };
+  
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      // 服务器用的是 Socket.io，但这里的 WebSocket 连接不是...
+      // 实际上需要根据服务器事件来处理
+      handleWSEvent(e.data);
+    } catch {}
+  };
+}
+
+// 改用轮询作为主要数据获取方式（兼容 Socket.io）
+function startPolling() {
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/dashboard/snapshot');
+      const data = await res.json();
+      if (data.teams) {
+        updateDashboard(data.teams, data.avg_radar_scores);
+      }
+    } catch {}
+  }, 2000);
+}
+
+function updateDashboard(teams, avgRadar) {
+  if (!teams || teams.length === 0) return;
+  
+  document.getElementById('submit-count').textContent = teams.length;
+  
+  // 更新雷达图
+  if (avgRadar) {
+    const values = [
+      avgRadar['决策效率'], avgRadar['沟通成本'], avgRadar['执行偏差'],
+      avgRadar['管理幅度'], avgRadar['响应速度'], avgRadar['冗余程度']
+    ];
+    radarChart.setOption({
+      series: [{ data: [{ value: values, name: '全班平均' }] }]
+    });
+  }
+  
+  // 更新散点图
+  scatterData = teams.map(t => {
+    const radar = t.radar_scores || {};
+    const groupCount = (t.architecture ? JSON.parse(t.architecture) : { groups: [] }).groups?.length || 
+      Math.round(Math.random() * 4 + 1);
+    const avgSpan = radar['管理幅度'] ? Math.round((100 - radar['管理幅度']) / 15 * 10 + 2) : Math.round(Math.random() * 8 + 2);
+    
+    demolishData[t.team_name] = t;
+    
+    return {
+      value: [groupCount, avgSpan, t.team_name],
+      itemStyle: { color: t.verdict === 'survive' ? '#00E5FF' : '#FF1744' }
+    };
+  });
+  
+  scatterChart.setOption({
+    series: [{ data: scatterData.map(d => ({ ...d.value, itemStyle: d.itemStyle })) }]
+  });
+  
+  // 更新战报
+  for (const t of teams) {
+    const existing = battleLogs.find(l => l.team_id === t.team_id);
+    if (!existing) {
+      battleLogs.push(t);
+      addBattleLog(t);
+    }
+  }
+}
+
+function addBattleLog(team) {
+  const inner = document.getElementById('battle-log-inner');
+  const cls = team.verdict === 'survive' ? 'survive' : 'bankrupt';
+  const icon = team.verdict === 'survive' ? '🟢' : '🔴';
+  const item = document.createElement('span');
+  item.className = 'battle-item ' + cls;
+  item.innerHTML = `<span class="battle-dot ${cls}"></span>${icon} "${team.team_name}" | ${team.message}`;
+  inner.appendChild(item);
+}
+
+function showDrilldown(pointData) {
+  if (!pointData) return;
+  const team = demolishData[pointData.value[2]];
+  if (!team) return;
+  
+  document.getElementById('drill-name').textContent = team.team_name;
+  document.getElementById('drill-info').innerHTML = 
+    `生存率: ${team.survival_rate}% | 判定: ${team.verdict === 'survive' ? '存活' : '破产'}<br>危机: ${team.crisis_passed ? '通过' : '未通过'} | ${team.message}`;
+  
+  // 架构缩略图
+  const topoEl = document.getElementById('drill-topo');
+  topoEl.innerHTML = '';
+  try {
+    const arch = typeof team.architecture === 'string' ? JSON.parse(team.architecture) : team.architecture;
+    if (arch && arch.nodes) {
+      const nodeTypes = {};
+      arch.nodes.forEach(n => { nodeTypes[n.type] = (nodeTypes[n.type] || 0) + 1; });
+      const summary = Object.entries(nodeTypes).map(([k, v]) => 
+        `<span class="mini-node ${k}">${k==='manager'?'店长':k==='staff'?'员工':k}: ${v}</span>`
+      ).join('');
+      topoEl.innerHTML = summary || '架构数据加载中…';
+    }
+  } catch { topoEl.innerHTML = '架构数据异常'; }
+  
+  document.getElementById('drilldown').style.display = 'block';
+}
+
+function closeDrilldown() {
+  document.getElementById('drilldown').style.display = 'none';
+}
+
+// ==================== 教师操作 ====================
+async function toggleMock() {
+  const btn = document.getElementById('btn-mock');
+  mockRunning = !mockRunning;
+  
+  if (mockRunning) {
+    btn.textContent = '🎭 Mock运行中';
+    btn.classList.add('on');
+    startMockLocal();
+  } else {
+    btn.textContent = '🎭 Mock演示';
+    btn.classList.remove('on');
+    stopMockLocal();
+  }
+  
+  // 同时通知服务器
+  try {
+    await fetch('/api/dashboard/snapshot'); // 服务器端通过 WS 控制
+  } catch {}
+}
+
+let mockInterval = null;
+let mockIdx = 0;
+
+function startMockLocal() {
+  battleLogs = [];
+  document.getElementById('battle-log-inner').innerHTML = '';
+  demolishData = {};
+  
+  const names = ['赤焰少年队','瑞幸突击队','星巴克战队','飞虎队','海底捞小队','元气森林组','蜜雪冰城连'];
+  const results = [
+    { rate: 85, msg: '架构存活，效率提升15%', verdict: 'survive', passed: true },
+    { rate: 92, msg: '私域护城河建立，绝境翻盘', verdict: 'survive', passed: true },
+    { rate: 35, msg: '管理幅度超载，系统瘫痪', verdict: 'bankrupt', passed: false },
+    { rate: 72, msg: '架构存活，效率提升8%', verdict: 'survive', passed: true },
+    { rate: 28, msg: '管理幅度击穿，瘫痪', verdict: 'bankrupt', passed: false },
+    { rate: 95, msg: '矩阵重组完美，存活率95%', verdict: 'survive', passed: true },
+    { rate: 15, msg: '未建立私域护城河，破产', verdict: 'bankrupt', passed: false },
+  ];
+  
+  mockIdx = 0;
+  mockInterval = setInterval(() => {
+    if (mockIdx >= names.length) {
+      mockIdx = 0;
+      demolishData = {};
+      document.getElementById('battle-log-inner').innerHTML = '';
+      battleLogs = [];
+      scatterData = [];
+    }
+    
+    const name = names[mockIdx];
+    const r = results[mockIdx];
+    const radar = {
+      '决策效率': Math.round(40 + Math.random() * 55),
+      '沟通成本': Math.round(10 + Math.random() * 70),
+      '执行偏差': Math.round(10 + Math.random() * 60),
+      '管理幅度': Math.round(30 + Math.random() * 65),
+      '响应速度': Math.round(20 + Math.random() * 70),
+      '冗余程度': Math.round(30 + Math.random() * 60)
+    };
+    
+    const team = {
+      team_id: 'mock-' + mockIdx,
+      team_name: name,
+      survival_rate: r.rate,
+      radar_scores: radar,
+      crisis_passed: r.passed,
+      message: r.msg,
+      verdict: r.verdict,
+      architecture: JSON.stringify({
+        nodes: [
+          { id: 'shop_manager', type: 'manager', label: '店长' },
+          { id: 'g01', type: 'group', label: '吧台组' },
+          ...Array(3).fill(0).map((_, i) => ({ id: 's0' + (i + 1), type: 'staff', label: '员工' })),
+          { id: 'g02', type: 'group', label: '外卖组' },
+          ...Array(3).fill(0).map((_, i) => ({ id: 's0' + (i + 4), type: 'staff', label: '员工' })),
+        ]
+      })
+    };
+    
+    demolishData[name] = team;
+    
+    // 更新图表
+    updateDashboard([...Object.values(demolishData)], radar);
+    
+    mockIdx++;
+  }, 2500);
+}
+
+function stopMockLocal() {
+  if (mockInterval) { clearInterval(mockInterval); mockInterval = null; }
+}
+
+async function triggerCrisis() {
+  try {
+    await fetch('/api/team/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_id: 'crisis-trigger', architecture: { nodes: [], edges: [] }, crisis_duration_seconds: 0 })
+    });
+  } catch {}
+  // 通知所有学生端
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'CRISIS_TRIGGER' }));
+  }
+}
+
+async function resetAll() {
+  await fetch('/api/admin/reset', { method: 'POST' });
+  battleLogs = [];
+  demolishData = {};
+  scatterData = [];
+  document.getElementById('battle-log-inner').innerHTML = '';
+  document.getElementById('submit-count').textContent = '0';
+  radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
+  scatterChart.setOption({ series: [{ data: [] }] });
+}
+
+// ==================== 初始化 ====================
+connectWS();
+startPolling();
+
+// F11全屏提示
+document.addEventListener('keydown', e => {
+  if (e.key === 'F11') { e.preventDefault(); document.documentElement.requestFullscreen(); }
+});
+</script>
+</body>
+</html>

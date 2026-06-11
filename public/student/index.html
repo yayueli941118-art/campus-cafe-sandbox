@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>沙盘实战 - 学生端</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-apple-system,sans-serif;background:#121212;color:#e0e0e0}
+.page{display:none;width:100%;height:100%;flex-direction:column;overflow:hidden}
+.page.active{display:flex}
+
+/* Page 1: 入局登记 */
+#page-join{justify-content:center;align-items:center;background:radial-gradient(ellipse at center,#1a1a2e 0%,#121212 70%)}
+.join-card{width:85%;max-width:360px;padding:32px 24px;background:rgba(255,255,255,0.05);border:1px solid rgba(0,229,255,0.2);border-radius:16px;text-align:center}
+.join-card h1{font-size:22px;color:#00E5FF;margin-bottom:8px}
+.join-card p{font-size:13px;color:#888;margin-bottom:24px}
+.join-card input{width:100%;padding:14px;margin-bottom:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#fff;font-size:16px;outline:none;transition:border .2s}
+.join-card input:focus{border-color:#00E5FF}
+.join-card .btn{width:100%;padding:14px;background:linear-gradient(135deg,#00E5FF,#0091EA);border:none;border-radius:10px;color:#121212;font-size:17px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s}
+.join-card .btn:active{transform:scale(.97)}
+.join-card .btn:disabled{opacity:.4;animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* Page 2: 拓扑编辑 */
+#page-topo{background:#121212}
+.topo-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(0,229,255,0.08);border-bottom:1px solid rgba(0,229,255,0.12)}
+.topo-stats{font-size:14px}
+.topo-stats .label{color:#aaa}
+.topo-stats .val{color:#00E5FF;font-weight:700;margin:0 4px}
+.topo-stats .warn{color:#FF1744;font-weight:700}
+.topo-actions{display:flex;gap:8px}
+.btn-sm{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-primary{background:#00E5FF;color:#121212}
+.btn-submit{background:#00E5FF;color:#121212;font-size:14px;padding:10px 20px}
+.btn-crisis{background:#FF1744;color:#fff}
+.btn-add-group{background:rgba(0,229,255,0.15);color:#00E5FF;border:1px dashed rgba(0,229,255,0.3)}
+
+.canvas-wrap{flex:1;position:relative;overflow:hidden;touch-action:none}
+#topo-canvas{width:100%;height:100%;position:relative}
+#edge-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
+
+.node{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:12px;font-size:12px;font-weight:600;text-align:center;z-index:2;transition:box-shadow .2s;cursor:grab;user-select:none;-webkit-user-select:none}
+.node:active{cursor:grabbing}
+.node.manager{width:56px;height:56px;background:linear-gradient(135deg,#FF6D00,#FF9100);color:#fff;font-size:14px;border-radius:50%;z-index:10}
+.node.staff{width:50px;height:36px;background:#444;color:#ccc;font-size:11px}
+.node.staff.assigned{background:#37474F;color:#00E5FF;border:1px solid rgba(0,229,255,0.3)}
+.node.staff.dragging{opacity:.7;z-index:100;box-shadow:0 4px 20px rgba(0,229,255,0.3)}
+
+.group{position:absolute;background:rgba(0,229,255,0.05);border:2px dashed rgba(0,229,255,0.2);border-radius:12px;min-width:120px;min-height:80px;z-index:3;display:flex;flex-direction:column;padding-top:24px;transition:border-color .2s,background .2s}
+.group.highlight{border-color:#00E5FF;background:rgba(0,229,255,0.12)}
+.group-label{position:absolute;top:4px;left:8px;font-size:11px;color:#00E5FF;font-weight:600;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+.group-count{position:absolute;top:4px;right:8px;font-size:10px;color:#666}
+.group .staff-node-wrap{display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px}
+
+.unassigned-area{position:absolute;bottom:8px;left:8px;right:8px;height:60px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;z-index:2}
+.unassigned-label{position:absolute;top:-18px;left:8px;font-size:10px;color:#666}
+
+/* Page 3: 危机事件 */
+#page-crisis{background:#121212;position:relative}
+.crisis-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,23,68,0.08);z-index:50;pointer-events:none}
+.crisis-modal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#1E1E1E;border:2px solid #FF1744;border-radius:16px;padding:24px;text-align:center;z-index:60;width:85%;max-width:340px;animation:crisisIn .3s}
+@keyframes crisisIn{from{transform:translate(-50%,-50%) scale(.8);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.crisis-modal h2{color:#FF1744;font-size:20px;margin-bottom:8px}
+.crisis-modal p{color:#ccc;font-size:14px;line-height:1.6;margin-bottom:16px}
+.timer{font-size:48px;font-weight:900;color:#00E5FF;margin:8px 0}
+.timer.urgent{color:#FF1744;animation:pulse .5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.timer-bar{width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:12px;overflow:hidden}
+.timer-bar-fill{height:100%;background:linear-gradient(90deg,#FF1744,#00E5FF);border-radius:2px;transition:width .1s linear}
+
+/* 结果等待 */
+#page-waiting{justify-content:center;align-items:center;background:#121212}
+.waiting-spinner{width:48px;height:48px;border:3px solid rgba(0,229,255,0.2);border-top-color:#00E5FF;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.waiting-text{color:#888;font-size:14px;margin-top:16px}
+
+/* 结果展示 */
+#page-result{justify-content:center;align-items:center;background:#121212}
+.result-card{width:85%;max-width:360px;padding:32px 24px;border-radius:16px;text-align:center}
+.result-card.survive{background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3)}
+.result-card.bankrupt{background:rgba(255,23,68,0.08);border:1px solid rgba(255,23,68,0.3)}
+.result-card .verdict{font-size:28px;font-weight:900;margin-bottom:8px}
+.result-card .verdict.survive{color:#00E5FF}
+.result-card .verdict.bankrupt{color:#FF1744}
+.result-card .rate{font-size:64px;font-weight:900;margin:12px 0}
+.result-card .rate.survive{color:#00E5FF}
+.result-card .rate.bankrupt{color:#FF1744}
+.result-card .msg{font-size:14px;color:#aaa;margin:8px 0 20px}
+.result-card .btn{margin-top:16px}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(255,23,68,0.9);color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:200;animation:toastIn .3s}
+@keyframes toastIn{from{transform:translateX(-50%) translateY(-20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+
+@media(min-width:768px){
+  .canvas-wrap{max-width:400px;margin:0 auto}
+}
+</style>
+</head>
+<body>
+
+<!-- Page 1: 入局登记 -->
+<div id="page-join" class="page active">
+  <div class="join-card">
+    <h1>☕ 咖啡馆沙盘</h1>
+    <p>数智化敏捷架构实战</p>
+    <input id="input-team" type="text" placeholder="团队名称（最多12字）" maxlength="12">
+    <input id="input-leader" type="text" placeholder="队长姓名">
+    <button class="btn" id="btn-join" onclick="joinGame()">一键接管指挥权</button>
+  </div>
+</div>
+
+<!-- Page 2: 拓扑编辑 -->
+<div id="page-topo" class="page">
+  <div class="topo-header">
+    <div class="topo-stats">
+      <span class="label">编制</span><span class="val" id="stat-total">15</span>
+      <span class="label">| 已分配</span><span class="val" id="stat-assigned">10</span>
+      <span class="label">| 剩余</span><span class="val" id="stat-remain">5</span>
+      <span class="label">| 店长幅度</span><span class="val" id="stat-span">10</span>
+      <span class="label">群组</span><span class="val" id="stat-groups">0</span>
+    </div>
+    <div class="topo-actions">
+      <button class="btn-sm btn-add-group" onclick="addGroup()">+ 新建群组</button>
+      <button class="btn-sm btn-submit" id="btn-submit-topo" onclick="submitArchitecture()">提交架构推演</button>
+    </div>
+  </div>
+  <div class="canvas-wrap" id="canvas-wrap">
+    <div id="topo-canvas">
+      <svg id="edge-svg"></svg>
+    </div>
+    <div class="unassigned-area" id="unassigned-area">
+      <span class="unassigned-label">未分配员工</span>
+    </div>
+  </div>
+</div>
+
+<!-- Page 3: 危机事件 -->
+<div id="page-crisis" class="page">
+  <div class="crisis-overlay"></div>
+  <div id="crisis-modal-wrap">
+    <div class="crisis-modal" id="crisis-modal">
+      <h2>⚠️ 突发危机</h2>
+      <p id="crisis-text">外卖抽成上调10%！请立刻在架构中增设「私域流量运营组」，否则系统将在60秒后自动判定破产！</p>
+      <div class="timer" id="crisis-timer">60</div>
+      <div class="timer-bar"><div class="timer-bar-fill" id="timer-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+  <div class="topo-header" style="position:absolute;bottom:0;left:0;right:0;z-index:70">
+    <div class="topo-stats">
+      <span class="label">剩余</span><span class="val" id="stat-remain-c">5</span>
+      <span class="label">| 群组</span><span class="val" id="stat-groups-c">0</span>
+    </div>
+    <button class="btn-sm btn-crisis" onclick="submitCrisis()">提交架构推演</button>
+  </div>
+</div>
+
+<!-- 等待页 -->
+<div id="page-waiting" class="page">
+  <div class="waiting-spinner"></div>
+  <div class="waiting-text">判定中…等待全班结果…</div>
+</div>
+
+<!-- 结果页 -->
+<div id="page-result" class="page">
+  <div class="result-card" id="result-card">
+    <div class="verdict" id="verdict-text">--</div>
+    <div class="rate" id="rate-text">--</div>
+    <div class="msg" id="result-msg"></div>
+    <div style="font-size:11px;color:#666;margin:8px 0" id="radar-detail"></div>
+  </div>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+let teamId = '';
+let teamName = '';
+let nodes = [];
+let groups = [];
+let edges = [];
+let crisisTimer = null;
+let crisisSeconds = 60;
+let hasCrisis = false;
+
+// ==================== 页面切换 ====================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// ==================== Page 1: 入局 ====================
+async function joinGame() {
+  teamName = document.getElementById('input-team').value.trim();
+  const leader = document.getElementById('input-leader').value.trim();
+  if (!teamName) { toast('请输入团队名称'); return; }
+  if (!leader) { toast('请输入队长姓名'); return; }
+
+  const btn = document.getElementById('btn-join');
+  btn.disabled = true;
+  btn.textContent = '接入中…';
+
+  try {
+    const res = await fetch('/api/team/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_name: teamName, leader })
+    });
+    if (!res.ok) { const e = await res.json(); toast(e.error); btn.disabled = false; btn.textContent = '一键接管指挥权'; return; }
+    
+    const data = await res.json();
+    teamId = data.team_id;
+    nodes = data.initial_architecture.nodes;
+    groups = data.initial_architecture.groups || [];
+    edges = data.initial_architecture.edges;
+    
+    showPage('page-topo');
+    renderTopology();
+  } catch (e) {
+    toast('网络错误，请重试');
+    btn.disabled = false;
+    btn.textContent = '一键接管指挥权';
+  }
+}
+
+// ==================== Page 2: 拓扑编辑器 ====================
+function renderTopology() {
+  const canvas = document.getElementById('topo-canvas');
+  const unassigned = document.getElementById('unassigned-area');
+  const svg = document.getElementById('edge-svg');
+  
+  // 清除旧元素（保留 SVG 和 unassigned）
+  canvas.querySelectorAll('.node,.group').forEach(el => el.remove());
+  unassigned.querySelectorAll('.node.staff').forEach(el => el.remove());
+
+  // 渲染群组
+  for (const g of groups) {
+    const members = nodes.filter(n => n.type === 'staff' && n.group_id === g.id);
+    const el = document.createElement('div');
+    el.className = 'group';
+    el.id = 'group-' + g.id;
+    el.style.left = g.x + 'px';
+    el.style.top = g.y + 'px';
+    el.style.width = (g.width || 140) + 'px';
+    el.style.minHeight = Math.max(80, members.length * 28 + 30) + 'px';
+    el.innerHTML = `<span class="group-label" ondblclick="renameGroup('${g.id}')">${g.label}</span><span class="group-count">${members.length}人</span>`;
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('highlight'); });
+    el.addEventListener('dragleave', () => el.classList.remove('highlight'));
+    el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('highlight'); handleDrop(e, g.id); });
+    el.ontouchmove = null; // handled by canvas
+    canvas.appendChild(el);
+  }
+
+  // 渲染节点
+  for (const n of nodes) {
+    if (n.group_id) continue; // 群组成员在群组内渲染
+    const el = createNodeElement(n);
+    if (n.type === 'staff') {
+      unassigned.appendChild(el);
+    } else {
+      canvas.appendChild(el);
+    }
+  }
+
+  // 渲染群组内的员工
+  for (const g of groups) {
+    const groupEl = document.getElementById('group-' + g.id);
+    if (!groupEl) continue;
+    const members = nodes.filter(n => n.type === 'staff' && n.group_id === g.id);
+    for (const m of members) {
+      const el = createNodeElement(m);
+      el.style.position = 'relative';
+      el.style.left = 'auto';
+      el.style.top = 'auto';
+      el.classList.add('assigned');
+      groupEl.appendChild(el);
+    }
+  }
+
+  // 更新统计
+  updateStats();
+  
+  // 重绘 SVG 边
+  requestAnimationFrame(drawEdges);
+}
+
+function createNodeElement(n) {
+  const el = document.createElement('div');
+  el.className = 'node ' + n.type;
+  el.id = 'node-' + n.id;
+  el.textContent = n.label;
+  el.draggable = true;
+  el.style.left = (n.x || 10) + 'px';
+  el.style.top = (n.y || 10) + 'px';
+  el.setAttribute('data-node-id', n.id);
+  el.setAttribute('data-type', n.type);
+  
+  // 拖拽事件
+  el.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', n.id);
+    el.classList.add('dragging');
+  });
+  el.addEventListener('dragend', () => el.classList.remove('dragging'));
+  
+  // 移动端触摸拖拽
+  el.addEventListener('touchstart', handleTouchStart, { passive: false });
+  
+  return el;
+}
+
+// 触摸拖拽支持
+let touchDragNode = null;
+let touchOffsetX = 0, touchOffsetY = 0;
+
+function handleTouchStart(e) {
+  if (e.target.closest('.group-label')) return; // 允许编辑标题
+  e.preventDefault();
+  const nodeEl = e.target.closest('.node');
+  if (!nodeEl) return;
+  touchDragNode = nodeEl;
+  const rect = nodeEl.getBoundingClientRect();
+  touchOffsetX = e.touches[0].clientX - rect.left;
+  touchOffsetY = e.touches[0].clientY - rect.top;
+  nodeEl.classList.add('dragging');
+}
+
+document.addEventListener('touchmove', e => {
+  if (!touchDragNode) return;
+  e.preventDefault();
+  const canvasWrap = document.getElementById('canvas-wrap');
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const x = e.touches[0].clientX - wrapRect.left - touchOffsetX;
+  const y = e.touches[0].clientY - wrapRect.top - touchOffsetY;
+  touchDragNode.style.left = Math.max(0, x) + 'px';
+  touchDragNode.style.top = Math.max(0, y) + 'px';
+  
+  // 高亮下方群组
+  document.querySelectorAll('.group').forEach(g => g.classList.remove('highlight'));
+  const target = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+  const groupEl = target?.closest('.group');
+  if (groupEl) groupEl.classList.add('highlight');
+  drawEdges();
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+  if (!touchDragNode) return;
+  const nodeId = touchDragNode.getAttribute('data-node-id');
+  const n = nodes.find(nd => nd.id === nodeId);
+  const clientX = e.changedTouches[0].clientX;
+  const clientY = e.changedTouches[0].clientY;
+  const target = document.elementFromPoint(clientX, clientY);
+  const groupEl = target?.closest('.group');
+  
+  if (groupEl && n.type === 'staff') {
+    const gid = groupEl.id.replace('group-', '');
+    const g = groups.find(g => g.id === gid);
+    if (g) {
+      n.group_id = gid;
+      // 移除旧边，添加店长→群组的边
+      edges = edges.filter(e => !(e.to === n.id));
+      if (!edges.find(e => e.from === 'shop_manager' && e.to === gid)) {
+        edges.push({ from: 'shop_manager', to: gid });
+      }
+    }
+  } else {
+    // 放在未分配区：取消分组
+    if (n.type === 'staff') {
+      n.group_id = null;
+      // 如果在群组中移出，恢复直连
+      const stillInGroup = nodes.some(nd => nd.group_id === n.group_id);
+      if (!stillInGroup) {
+        // 不需要特殊处理，重新渲染时会修复
+      }
+    }
+  }
+  
+  touchDragNode.classList.remove('dragging');
+  touchDragNode = null;
+  document.querySelectorAll('.group').forEach(g => g.classList.remove('highlight'));
+  renderTopology();
+});
+
+function handleDrop(e, groupId) {
+  const nodeId = e.dataTransfer.getData('text/plain');
+  const n = nodes.find(nd => nd.id === nodeId);
+  if (!n || n.type !== 'staff') return;
+  
+  const g = groups.find(g => g.id === groupId);
+  if (!g) return;
+  
+  n.group_id = groupId;
+  // 添加店长→群组边
+  if (!edges.find(e => e.from === 'shop_manager' && e.to === groupId)) {
+    edges.push({ from: 'shop_manager', to: groupId });
+  }
+  renderTopology();
+}
+
+function addGroup() {
+  const name = prompt('请输入群组名称（如：吧台组、外卖组、品控组）');
+  if (!name || !name.trim()) return;
+  
+  const gid = 'g' + String(groups.length + 1).padStart(2, '0');
+  groups.push({
+    id: gid,
+    label: name.trim(),
+    x: 20 + groups.length * 10,
+    y: 90 + groups.length * 20,
+    width: 150,
+    height: 90,
+    members: []
+  });
+  renderTopology();
+}
+
+function renameGroup(gid) {
+  const g = groups.find(g => g.id === gid);
+  if (!g) return;
+  const newName = prompt('重命名群组', g.label);
+  if (newName && newName.trim()) {
+    g.label = newName.trim();
+    renderTopology();
+  }
+}
+
+function drawEdges() {
+  const svg = document.getElementById('edge-svg');
+  const canvas = document.getElementById('topo-canvas');
+  const canvasRect = canvas.getBoundingClientRect();
+  
+  let lines = '';
+  for (const e of edges) {
+    const fromEl = document.getElementById('node-' + e.from);
+    const toId = e.to.startsWith('g') ? 'group-' + e.to : 'node-' + e.to;
+    const toEl = document.getElementById(toId);
+    if (!fromEl || !toEl) continue;
+    
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    const x1 = fromRect.left + fromRect.width / 2 - canvasRect.left;
+    const y1 = fromRect.top + fromRect.height / 2 - canvasRect.top;
+    const x2 = toRect.left + toRect.width / 2 - canvasRect.left;
+    const y2 = toRect.top + toRect.height / 2 - canvasRect.top;
+    
+    lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(0,229,255,0.3)" stroke-width="1.5"/>`;
+  }
+  
+  svg.innerHTML = lines;
+  svg.setAttribute('viewBox', `0 0 ${canvas.offsetWidth} ${canvas.offsetHeight}`);
+  svg.style.width = canvas.offsetWidth + 'px';
+  svg.style.height = canvas.offsetHeight + 'px';
+}
+
+function updateStats() {
+  const staffCount = nodes.filter(n => n.type === 'staff').length;
+  const assignedStaff = nodes.filter(n => n.type === 'staff' && n.group_id).length;
+  const remain = 15 - staffCount;
+  const shopSpan = calcShopSpan();
+  
+  document.getElementById('stat-total').textContent = '15';
+  document.getElementById('stat-assigned').textContent = assignedStaff;
+  document.getElementById('stat-remain').textContent = remain;
+  document.getElementById('stat-span').textContent = shopSpan;
+  document.getElementById('stat-groups').textContent = groups.length;
+  
+  // 剩余少于3或管理幅度超8警告
+  const remainEl = document.getElementById('stat-remain');
+  remainEl.className = remain < 3 ? 'warn' : 'val';
+  const spanEl = document.getElementById('stat-span');
+  spanEl.className = shopSpan > 8 ? 'warn' : 'val';
+}
+
+function calcShopSpan() {
+  // 店长的管理幅度 = 直连的非群组员工数 + 群组数
+  const directStaff = nodes.filter(n => n.type === 'staff' && !n.group_id).length;
+  const uniqueGroups = new Set();
+  for (const e of edges) {
+    if (e.from === 'shop_manager' && e.to.startsWith('g')) {
+      uniqueGroups.add(e.to);
+    }
+  }
+  // 也检查未在edges中但通过group_id关联的
+  for (const n of nodes) {
+    if (n.type === 'staff' && n.group_id) {
+      uniqueGroups.add(n.group_id);
+    }
+  }
+  return directStaff + uniqueGroups.size;
+}
+
+function buildArchitectureJSON() {
+  const archNodes = nodes.map(n => ({
+    id: n.id, label: n.label, type: n.type,
+    parent_id: n.type === 'staff' ? (n.group_id || 'shop_manager') : null,
+    group_id: n.group_id || null
+  }));
+  
+  // 重建边：店长→未分组员工，店长→群组
+  const archEdges = [];
+  for (const n of nodes) {
+    if (n.type === 'staff') {
+      if (n.group_id) {
+        archEdges.push({ from: n.group_id, to: n.id });
+      } else {
+        archEdges.push({ from: 'shop_manager', to: n.id });
+      }
+    }
+  }
+  // 店长→群组
+  const seenGroups = new Set();
+  for (const n of nodes) {
+    if (n.type === 'staff' && n.group_id && !seenGroups.has(n.group_id)) {
+      seenGroups.add(n.group_id);
+      archEdges.push({ from: 'shop_manager', to: n.group_id });
+    }
+  }
+
+  return { nodes: archNodes, edges: archEdges };
+}
+
+async function submitArchitecture() {
+  const arch = buildArchitectureJSON();
+  try {
+    const res = await fetch('/api/team/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_id: teamId, architecture: arch, crisis_duration_seconds: 0 })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showResult(data);
+    } else {
+      toast(data.error || '提交失败');
+    }
+  } catch (e) {
+    toast('网络错误');
+  }
+}
+
+// ==================== Page 3: 危机事件 ====================
+let crisisCanvasInterval = null;
+
+function triggerCrisis() {
+  hasCrisis = true;
+  crisisSeconds = 60;
+  showPage('page-crisis');
+  
+  // 复制当前拓扑到危机页的 canvas
+  document.getElementById('crisis-canvas-area').innerHTML = '';
+  const crisisCanvas = document.getElementById('topo-canvas').cloneNode(true);
+  crisisCanvas.id = 'crisis-canvas';
+  document.getElementById('crisis-canvas-area').appendChild(crisisCanvas);
+  
+  // 更新统计
+  updateCrisisStats();
+  crisisCanvasInterval = setInterval(updateCrisisStats, 2000);
+  
+  // 倒计时
+  updateCrisisTimer();
+  crisisTimer = setInterval(() => {
+    crisisSeconds--;
+    updateCrisisTimer();
+    if (crisisSeconds <= 0) {
+      clearInterval(crisisTimer);
+      if (crisisCanvasInterval) clearInterval(crisisCanvasInterval);
+      submitCrisis();
+    }
+  }, 1000);
+  
+  // 2秒后收起模态框
+  setTimeout(() => {
+    document.getElementById('crisis-modal').style.display = 'none';
+  }, 2000);
+}
+
+function updateCrisisTimer() {
+  const el = document.getElementById('crisis-timer');
+  const fill = document.getElementById('timer-fill');
+  el.textContent = crisisSeconds;
+  fill.style.width = (crisisSeconds / 60 * 100) + '%';
+  if (crisisSeconds <= 10) {
+    el.classList.add('urgent');
+  } else {
+    el.classList.remove('urgent');
+  }
+}
+
+function updateCrisisStats() {
+  document.getElementById('stat-remain-c').textContent = 15 - nodes.filter(n => n.type === 'staff').length;
+  document.getElementById('stat-groups-c').textContent = groups.length;
+}
+
+async function submitCrisis() {
+  if (crisisTimer) clearInterval(crisisTimer);
+  if (crisisCanvasInterval) clearInterval(crisisCanvasInterval);
+  
+  const arch = buildArchitectureJSON();
+  showPage('page-waiting');
+  
+  try {
+    const res = await fetch('/api/team/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_id: teamId, architecture: arch, crisis_duration_seconds: 60 - crisisSeconds })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      // 延迟显示结果，模拟等待全班
+      setTimeout(() => showResult(data), 1500);
+    } else {
+      toast(data.error || '提交失败');
+      showPage('page-crisis');
+    }
+  } catch (e) {
+    toast('网络错误');
+    showPage('page-crisis');
+  }
+}
+
+function showResult(data) {
+  showPage('page-result');
+  const card = document.getElementById('result-card');
+  const verdictEl = document.getElementById('verdict-text');
+  const rateEl = document.getElementById('rate-text');
+  const msgEl = document.getElementById('result-msg');
+  const radarEl = document.getElementById('radar-detail');
+  
+  card.className = 'result-card ' + data.verdict;
+  verdictEl.className = 'verdict ' + data.verdict;
+  rateEl.className = 'rate ' + data.verdict;
+  
+  verdictEl.textContent = data.verdict === 'survive' ? '🎉 架构存活' : '💀 宣告破产';
+  rateEl.textContent = data.survival_rate + '%';
+  msgEl.textContent = data.message;
+  
+  if (data.radar_scores) {
+    const entries = Object.entries(data.radar_scores);
+    radarEl.textContent = entries.map(([k, v]) => k + ': ' + v).join('  |  ');
+  }
+}
+
+// ==================== WebSocket 监听（危机触发） ====================
+let ws = null;
+function connectWS() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(protocol + '//' + location.host);
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'CRISIS_TRIGGER' && !hasCrisis) {
+        triggerCrisis();
+      }
+    } catch {}
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+// 仅在拓扑页面或危机页面连接
+connectWS();
+
+// 教师端可手动触发危机（调试用）
+window.triggerCrisis = triggerCrisis;
+
+// 窗口大小变化时重绘
+window.addEventListener('resize', () => {
+  if (document.getElementById('page-topo').classList.contains('active')) {
+    drawEdges();
+  }
+});
+
+// 初始化时在危机页也渲染拓扑
+document.getElementById('page-crisis').insertAdjacentHTML('afterbegin', 
+  '<div class="canvas-wrap" id="crisis-canvas-area" style="flex:1"></div>');
+</script>
+</body>
+</html>
