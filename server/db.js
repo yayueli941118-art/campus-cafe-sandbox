@@ -1,82 +1,78 @@
 /**
- * SQLite 数据库模块 - 团队状态持久化
+ * 数据持久化模块 - 纯 JSON 文件存储（零原生依赖）
  */
-
-const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'sandbox.db');
+const DATA_PATH = path.join(__dirname, '..', 'data');
+const DB_FILE = path.join(DATA_PATH, 'db.json');
 
-let db;
+let data = { teams: [] };
+let initialized = false;
 
 function init() {
-  const fs = require('fs');
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH, { recursive: true });
+  if (fs.existsSync(DB_FILE)) {
+    try { data = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')); } catch (e) { data = { teams: [] }; }
+  }
+  if (!data.teams) data.teams = [];
+  initialized = true;
+  return { teams: data.teams };
+}
 
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS teams (
-      id TEXT PRIMARY KEY,
-      team_name TEXT NOT NULL,
-      leader TEXT NOT NULL,
-      architecture TEXT,
-      verdict TEXT,
-      survival_rate INTEGER,
-      radar_scores TEXT,
-      crisis_passed INTEGER DEFAULT 0,
-      message TEXT,
-      submitted_at TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
-
-  return db;
+function save() {
+  if (!fs.existsSync(DATA_PATH)) fs.mkdirSync(DATA_PATH, { recursive: true });
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
 function createTeam(id, teamName, leader) {
-  const stmt = db.prepare('INSERT INTO teams (id, team_name, leader) VALUES (?, ?, ?)');
-  stmt.run(id, teamName, leader);
+  data.teams.push({
+    id, team_name: teamName, leader,
+    architecture: null, verdict: null, survival_rate: null,
+    radar_scores: null, crisis_passed: 0, message: null,
+    submitted_at: null, created_at: new Date().toISOString()
+  });
+  save();
 }
 
 function getTeam(id) {
-  return db.prepare('SELECT * FROM teams WHERE id = ?').get(id);
+  return data.teams.find(t => t.id === id) || null;
 }
 
 function getAllTeams() {
-  return db.prepare('SELECT * FROM teams ORDER BY created_at DESC').all();
+  return [...data.teams].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
 }
 
 function getSubmittedTeams() {
-  return db.prepare("SELECT * FROM teams WHERE submitted_at IS NOT NULL ORDER BY submitted_at DESC").all();
+  return data.teams.filter(t => t.submitted_at).sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''));
 }
 
 function submitTeam(id, architecture, verdict, survivalRate, radarScores, crisisPassed, message) {
-  const stmt = db.prepare(`
-    UPDATE teams SET 
-      architecture = ?, verdict = ?, survival_rate = ?, radar_scores = ?, 
-      crisis_passed = ?, message = ?, submitted_at = datetime('now')
-    WHERE id = ?
-  `);
-  stmt.run(JSON.stringify(architecture), verdict, survivalRate, JSON.stringify(radarScores), crisisPassed ? 1 : 0, message, id);
+  const t = data.teams.find(t => t.id === id);
+  if (!t) return;
+  t.architecture = JSON.stringify(architecture);
+  t.verdict = verdict;
+  t.survival_rate = survivalRate;
+  t.radar_scores = JSON.stringify(radarScores);
+  t.crisis_passed = crisisPassed ? 1 : 0;
+  t.message = message;
+  t.submitted_at = new Date().toISOString();
+  save();
 }
 
 function getAvgRadarScores() {
-  const rows = db.prepare("SELECT radar_scores FROM teams WHERE radar_scores IS NOT NULL").all();
-  if (rows.length === 0) return null;
-
+  const submitted = data.teams.filter(t => t.radar_scores);
+  if (submitted.length === 0) return null;
   const totals = {};
   let count = 0;
-  for (const row of rows) {
+  for (const t of submitted) {
     try {
-      const scores = JSON.parse(row.radar_scores);
+      const scores = typeof t.radar_scores === 'string' ? JSON.parse(t.radar_scores) : t.radar_scores;
       for (const [key, val] of Object.entries(scores)) {
         totals[key] = (totals[key] || 0) + val;
       }
       count++;
-    } catch (e) { /* skip */ }
+    } catch (e) {}
   }
   if (count === 0) return null;
   const avg = {};
@@ -87,7 +83,8 @@ function getAvgRadarScores() {
 }
 
 function resetAll() {
-  db.exec("DELETE FROM teams");
+  data.teams = [];
+  save();
 }
 
 module.exports = { init, createTeam, getTeam, getAllTeams, getSubmittedTeams, submitTeam, getAvgRadarScores, resetAll };
