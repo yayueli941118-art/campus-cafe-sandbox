@@ -196,12 +196,14 @@ function connectWS() {
 }
 
 // 改用轮询作为主要数据获取方式（兼容 Socket.io）
+let pollingInterval = null;
 function startPolling() {
-  setInterval(async () => {
+  pollingInterval = setInterval(async () => {
+    if (mockRunning) return; // Mock 模式下跳过轮询
     try {
       const res = await fetch('/api/dashboard/snapshot');
       const data = await res.json();
-      if (data.teams) {
+      if (data.teams && data.teams.length > 0) {
         updateDashboard(data.teams, data.avg_radar_scores);
       }
     } catch {}
@@ -385,6 +387,14 @@ function startMockLocal() {
 
 function stopMockLocal() {
   if (mockInterval) { clearInterval(mockInterval); mockInterval = null; }
+  // 清空 Mock 数据，恢复空状态等待真实提交
+  battleLogs = [];
+  demolishData = {};
+  scatterData = [];
+  document.getElementById('battle-log-inner').innerHTML = '';
+  document.getElementById('submit-count').textContent = '0';
+  radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
+  scatterChart.setOption({ series: [{ data: [] }] });
 }
 
 async function triggerCrisis() {
@@ -413,7 +423,14 @@ async function resetAll() {
 }
 
 // ==================== 初始化 ====================
-connectWS();
+// 默认开启 Mock 模式，大屏立刻有数据可看
+setTimeout(() => {
+  startMockLocal();
+  document.getElementById('btn-mock').textContent = '🎭 Mock运行中';
+  document.getElementById('btn-mock').classList.add('on');
+  mockRunning = true;
+}, 500);
+
 startPolling();
 
 // F11全屏提示
