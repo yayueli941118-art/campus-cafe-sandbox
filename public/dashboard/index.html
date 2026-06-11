@@ -242,7 +242,10 @@ function updateDashboard(teams, avgRadar) {
   });
   
   scatterChart.setOption({
-    series: [{ data: scatterData.map(d => ({ ...d.value, itemStyle: d.itemStyle })) }]
+    series: [{ data: scatterData.map(d => ({
+      value: [d.value[0], d.value[1], d.value[2]],
+      itemStyle: d.itemStyle
+    })) }]
   });
   
   // 更新战报
@@ -399,16 +402,8 @@ function stopMockLocal() {
 
 async function triggerCrisis() {
   try {
-    await fetch('/api/team/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ team_id: 'crisis-trigger', architecture: { nodes: [], edges: [] }, crisis_duration_seconds: 0 })
-    });
+    await fetch('/api/admin/crisis', { method: 'POST' });
   } catch {}
-  // 通知所有学生端
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'CRISIS_TRIGGER' }));
-  }
 }
 
 async function resetAll() {

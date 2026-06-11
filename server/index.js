@@ -123,6 +123,24 @@ app.post('/api/admin/reset', (req, res) => {
   res.json({ ok: true });
 });
 
+// 触发危机（HTTP端点，供大屏通过隧道调用）
+let activeCrisis = null;
+app.post('/api/admin/crisis', (req, res) => {
+  activeCrisis = { crisis_type: 'platform_fee', triggered_at: Date.now() };
+  io.emit('CRISIS_TRIGGER', { crisis_type: 'platform_fee', duration_seconds: 60 });
+  res.json({ ok: true, message: '危机已触发' });
+});
+
+// 查询是否有机（学生端轮询）
+app.get('/api/crisis/check', (req, res) => {
+  if (activeCrisis) {
+    res.json({ active: true, crisis_type: activeCrisis.crisis_type, duration_seconds: 60 });
+    activeCrisis = null; // 一次性消费
+  } else {
+    res.json({ active: false });
+  }
+});
+
 // ==================== WebSocket ====================
 
 io.on('connection', (socket) => {

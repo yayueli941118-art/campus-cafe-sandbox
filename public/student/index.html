@@ -673,23 +673,29 @@ function showResult(data) {
   }
 }
 
-// ==================== WebSocket 监听（危机触发） ====================
-let ws = null;
-function connectWS() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(protocol + '//' + location.host);
-  ws.onmessage = (e) => {
+// ==================== 危机轮询 ====================
+let crisisPollInterval = null;
+function startCrisisPolling() {
+  crisisPollInterval = setInterval(async () => {
     try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'CRISIS_TRIGGER' && !hasCrisis) {
+      const res = await fetch('/api/crisis/check');
+      const data = await res.json();
+      if (data.active && !hasCrisis) {
         triggerCrisis();
       }
     } catch {}
-  };
-  ws.onclose = () => setTimeout(connectWS, 3000);
+  }, 2000);
 }
-// 仅在拓扑页面或危机页面连接
-connectWS();
+
+// 进入拓扑页后开始轮询
+// 在 showPage('page-topo') 后调用
+const origShowPage = showPage;
+showPage = function(id) {
+  origShowPage(id);
+  if (id === 'page-topo' && !crisisPollInterval) {
+    startCrisisPolling();
+  }
+};
 
 // 教师端可手动触发危机（调试用）
 window.triggerCrisis = triggerCrisis;
