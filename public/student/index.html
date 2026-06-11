@@ -24,7 +24,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 
 /* Page 2: 拓扑编辑 */
 #page-topo{background:#121212}
-.topo-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(0,229,255,0.08);border-bottom:1px solid rgba(0,229,255,0.12)}
+.topo-header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(0,229,255,0.08);border-bottom:1px solid rgba(0,229,255,0.12)}
+.hint-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(255,193,7,0.08);border-bottom:1px solid rgba(255,193,7,0.15);font-size:12px;color:#FFC107;animation:fadeOut 6s forwards}
+@keyframes fadeOut{0%,70%{opacity:1}100%{opacity:0;height:0;padding:0;border:none;overflow:hidden}}
+.hint-bar .step{display:inline-flex;align-items:center;gap:4px;background:rgba(255,193,7,0.12);padding:2px 8px;border-radius:10px;font-size:11px}
+.hint-bar .step .num{width:16px;height:16px;background:#FFC107;color:#121212;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .topo-stats{font-size:14px}
 .topo-stats .label{color:#aaa}
 .topo-stats .val{color:#00E5FF;font-weight:700;margin:0 4px}
@@ -125,6 +129,12 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
       <button class="btn-sm btn-submit" id="btn-submit-topo" onclick="submitArchitecture()">提交架构推演</button>
     </div>
   </div>
+  <div class="hint-bar" id="hint-bar">
+    <span class="step"><span class="num">1</span>新建群组</span> →
+    <span class="step"><span class="num">2</span>拖员工到群组里</span> →
+    <span class="step"><span class="num">3</span>提交架构推演</span>
+    <span style="font-size:10px;color:#aaa;margin-left:4px">目标：把10个员工拆到≥3个组，店长只对接组长</span>
+  </div>
   <div class="canvas-wrap" id="canvas-wrap">
     <div id="topo-canvas">
       <svg id="edge-svg"></svg>
@@ -222,7 +232,18 @@ async function joinGame() {
     edges = data.initial_architecture.edges;
     
     showPage('page-topo');
+    // 预建3个空群组作为操作暗示
+    if (groups.length === 0) {
+      groups = [
+        { id: 'g01', label: '吧台组', x: 10, y: 80, width: 110, height: 110 },
+        { id: 'g02', label: '外卖组', x: 130, y: 80, width: 110, height: 110 },
+        { id: 'g03', label: '品控组', x: 250, y: 80, width: 105, height: 110 }
+      ];
+      edges = []; // 清除直线边，等学生拖入后再建边
+    }
     renderTopology();
+    // 6秒后自动隐藏引导条
+    setTimeout(() => { const h = document.getElementById('hint-bar'); if (h) h.style.display = 'none'; }, 8000);
   } catch (e) {
     toast('网络错误，请重试');
     btn.disabled = false;
