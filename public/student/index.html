@@ -282,13 +282,15 @@ function renderTopology() {
   const ch = canvas.offsetHeight || 600;
   const cw = canvas.offsetWidth || 360;
   const staffNodes = nodes.filter(n => n.type === 'staff' && !n.group_id);
-  const startY = Math.max(ch * 0.4, 200);
+  // 根据群组行数动态下移员工区
+  const groupRowCount = Math.max(1, Math.ceil(groups.length / 2));
+  const startY = Math.max(ch * 0.35, 110 + groupRowCount * 120 + 20);
   const gapX = Math.min(65, (cw - 40) / 5);
-  const gapY = Math.min(70, (ch - startY - 140) / 3);
+  const gapY = Math.min(65, (ch - startY - 100) / 3);
   
   for (let i = 0; i < staffNodes.length; i++) {
     staffNodes[i].x = 20 + (i % 5) * gapX;
-    staffNodes[i].y = Math.min(startY + Math.floor(i / 5) * gapY, ch - 130);
+    staffNodes[i].y = Math.min(startY + Math.floor(i / 5) * gapY, ch - 100);
   }
   
   for (const n of nodes) {
@@ -432,17 +434,22 @@ function handleDrop(e, groupId) {
 }
 
 function addGroup() {
-  const name = prompt('请输入群组名称（如：吧台组、外卖组、品控组）');
+  const name = prompt('请输入群组名称（如：吧台组、外卖组、品控组、私域运营组）');
   if (!name || !name.trim()) return;
   
   const gid = 'g' + String(groups.length + 1).padStart(2, '0');
+  // 自动排列：每行2个，下移避免重叠
+  const col = groups.length % 2;
+  const row = Math.floor(groups.length / 2);
+  const cw = Math.min(document.getElementById('topo-canvas').offsetWidth || 360, 360);
+  const gw = (cw - 30) / 2;
   groups.push({
     id: gid,
     label: name.trim(),
-    x: 20 + groups.length * 10,
-    y: 90 + groups.length * 20,
-    width: 150,
-    height: 90,
+    x: 8 + col * (gw + 10),
+    y: 110 + row * 120,
+    width: gw - 10,
+    height: 100,
     members: []
   });
   renderTopology();
