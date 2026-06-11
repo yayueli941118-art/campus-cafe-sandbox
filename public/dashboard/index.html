@@ -34,7 +34,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 .status-dot.off{background:#666}
 
 /* 主体布局 */
-.main{display:flex;flex:1;height:calc(100vh - 50px - 56px)}
+.main{display:flex;flex:1;height:calc(100vh - 50px - 56px - 90px)}
 .panel{position:relative;overflow:hidden}
 .panel-left{width:40%;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column}
 .panel-right{width:60%;display:flex;flex-direction:column}
@@ -43,16 +43,33 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 
 .panel-label{position:absolute;top:12px;left:16px;font-size:12px;color:#666;z-index:10;text-transform:uppercase;letter-spacing:2px}
 
-/* 底部战报 */
-.battle-log{height:80px;background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;overflow:hidden;position:relative}
-.battle-log-inner{display:flex;gap:24px;white-space:nowrap;padding:0 16px;animation:marquee 30s linear infinite}
-@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.battle-item{font-size:12px;padding:4px 12px;border-radius:4px;display:flex;align-items:center;gap:6px}
-.battle-item.survive{background:rgba(0,229,255,0.1);color:#00E5FF}
-.battle-item.bankrupt{background:rgba(255,23,68,0.1);color:#FF1744}
-.battle-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.battle-dot.survive{background:#00E5FF}
-.battle-dot.bankrupt{background:#FF1744}
+/* 底部战报 → PK排行榜 */
+.pk-leaderboard{height:90px;background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;overflow-x:auto;overflow-y:hidden;gap:10px;padding:0 12px;scroll-behavior:smooth}
+.pk-leaderboard::-webkit-scrollbar{height:3px}
+.pk-leaderboard::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:3px}
+
+.pk-card{flex-shrink:0;width:130px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;transition:all .4s;position:relative;overflow:hidden}
+.pk-card.survive{border-color:rgba(0,229,255,0.2)}
+.pk-card.bankrupt{border-color:rgba(255,23,68,0.2);opacity:0.55}
+.pk-card.top1{border-color:rgba(255,215,0,0.6);box-shadow:0 0 12px rgba(255,215,0,0.15)}
+.pk-card.top2{border-color:rgba(192,192,192,0.4);box-shadow:0 0 8px rgba(192,192,192,0.1)}
+.pk-card.top3{border-color:rgba(205,127,50,0.4);box-shadow:0 0 8px rgba(205,127,50,0.1)}
+.pk-card .rank-badge{position:absolute;top:-2px;right:4px;font-size:22px;opacity:0.9}
+.pk-card .team-name{font-size:11px;font-weight:700;color:#eee;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk-card .team-rate{font-size:20px;font-weight:800;margin:2px 0}
+.pk-card.survive .team-rate{color:#00E5FF}
+.pk-card.bankrupt .team-rate{color:#FF1744}
+.pk-card .rate-bar{height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin:3px 0;overflow:hidden}
+.pk-card .rate-bar-fill{height:100%;border-radius:2px;transition:width .5s}
+.pk-card.survive .rate-bar-fill{background:#00E5FF}
+.pk-card.bankrupt .rate-bar-fill{background:#FF1744}
+.pk-card .team-meta{font-size:9px;color:#666;display:flex;gap:8px}
+.pk-card .verdict-icon{font-size:11px}
+
+/* 提交弹窗特效 */
+.submission-toast{position:fixed;top:60px;right:-400px;background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);border-radius:10px;padding:10px 16px;z-index:200;font-size:13px;font-weight:700;color:#00E5FF;transition:right .4s cubic-bezier(0.175,0.885,0.32,1.275);white-space:nowrap}
+.submission-toast.show{right:16px}
+.submission-toast.bankrupt{background:rgba(255,23,68,0.12);border-color:rgba(255,23,68,0.3);color:#FF1744}
 
 /* 散点下钻浮层 */
 .drilldown{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1A1A2E;border:1px solid rgba(0,229,255,0.2);border-radius:12px;padding:20px;z-index:100;min-width:280px;display:none}
@@ -117,10 +134,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
   </div>
 </div>
 
-<!-- 底部战报 -->
-<div class="battle-log">
-  <div class="battle-log-inner" id="battle-log-inner"></div>
-</div>
+<!-- PK排行榜 -->
+<div class="pk-leaderboard" id="pk-leaderboard"></div>
+
+<!-- 提交弹窗特效 -->
+<div class="submission-toast" id="submission-toast"></div>
 
 <!-- 散点下钻浮层 -->
 <div class="drilldown" id="drilldown">
@@ -346,13 +364,41 @@ function updateDashboard(teams, avgRadar) {
 }
 
 function addBattleLog(team) {
-  const inner = document.getElementById('battle-log-inner');
-  const cls = team.verdict === 'survive' ? 'survive' : 'bankrupt';
-  const icon = team.verdict === 'survive' ? '🟢' : '🔴';
-  const item = document.createElement('span');
-  item.className = 'battle-item ' + cls;
-  item.innerHTML = `<span class="battle-dot ${cls}"></span>${icon} "${team.team_name}" | ${team.message}`;
-  inner.appendChild(item);
+  renderLeaderboard(battleLogs);
+  
+  // 弹出特效
+  const toast = document.getElementById('submission-toast');
+  toast.textContent = (team.verdict === 'survive' ? '🟢 ' : '💀 ') + 
+    team.team_name + ' ' + (team.verdict === 'survive' ? '存活!' : '破产!') + ' ' + team.survival_rate + '%';
+  toast.className = 'submission-toast ' + (team.verdict === 'bankrupt' ? 'bankrupt' : '');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function renderLeaderboard(teams) {
+  const container = document.getElementById('pk-leaderboard');
+  // 按生存率降序排列
+  const ranked = [...teams].sort((a, b) => (b.survival_rate || 0) - (a.survival_rate || 0));
+  
+  container.innerHTML = ranked.map((t, i) => {
+    const verdict = t.verdict || 'bankrupt';
+    const rankEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1);
+    const topClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+    const rate = t.survival_rate || 0;
+    const gc = t.architecture ? (typeof t.architecture === 'string' ? JSON.parse(t.architecture) : t.architecture).groups?.length || 0 : 0;
+    const verdictIcon = verdict === 'survive' ? '🟢' : '💀';
+    
+    return `<div class="pk-card ${verdict} ${topClass}">
+      <span class="rank-badge">${rankEmoji}</span>
+      <div class="team-name">${t.team_name}</div>
+      <div class="team-rate">${rate}%</div>
+      <div class="rate-bar"><div class="rate-bar-fill" style="width:${rate}%"></div></div>
+      <div class="team-meta">
+        <span>${gc}组</span>
+        <span class="verdict-icon">${verdictIcon}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function showDrilldown(pointData) {
@@ -412,7 +458,7 @@ let mockIdx = 0;
 
 function startMockLocal() {
   battleLogs = [];
-  document.getElementById('battle-log-inner').innerHTML = '';
+  document.getElementById('pk-leaderboard').innerHTML = '';
   demolishData = {};
   
   const names = ['赤焰少年队','瑞幸突击队','星巴克战队','飞虎队','海底捞小队','元气森林组','蜜雪冰城连'];
@@ -431,7 +477,7 @@ function startMockLocal() {
     if (mockIdx >= names.length) {
       mockIdx = 0;
       demolishData = {};
-      document.getElementById('battle-log-inner').innerHTML = '';
+      document.getElementById('pk-leaderboard').innerHTML = '';
       battleLogs = [];
       scatterData = [];
     }
@@ -490,7 +536,7 @@ function stopMockLocal() {
   battleLogs = [];
   demolishData = {};
   scatterData = [];
-  document.getElementById('battle-log-inner').innerHTML = '';
+  document.getElementById('pk-leaderboard').innerHTML = '';
   updateSummary({ joined: 0, submitted: 0, survived: 0, bankrupt: 0 });
   radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
   scatterChart.setOption({ series: [{ data: [], markLine: scatterOption.series[0].markLine, markArea: scatterOption.series[0].markArea }] });
@@ -520,7 +566,7 @@ async function resetAll() {
   battleLogs = [];
   demolishData = {};
   scatterData = [];
-  document.getElementById('battle-log-inner').innerHTML = '';
+  document.getElementById('pk-leaderboard').innerHTML = '';
   updateSummary({ joined: 0, submitted: 0, survived: 0, bankrupt: 0 });
   updatePhaseLights('building');
   radarChart.setOption({ series: [{ data: [{ value: [50, 50, 50, 50, 50, 50], name: '全班平均' }] }] });
