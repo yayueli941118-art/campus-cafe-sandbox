@@ -53,7 +53,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'PingFang SC',-appl
 .group-count{position:absolute;top:4px;right:8px;font-size:10px;color:#666}
 .group .staff-node-wrap{display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px}
 
-.unassigned-area{position:absolute;bottom:8px;left:8px;right:8px;height:60px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;z-index:2}
+.unassigned-area{position:absolute;bottom:8px;left:8px;right:8px;height:120px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;z-index:1;pointer-events:none}
 .unassigned-label{position:absolute;top:-18px;left:8px;font-size:10px;color:#666}
 
 /* Page 3: 危机事件 */
@@ -236,9 +236,8 @@ function renderTopology() {
   const unassigned = document.getElementById('unassigned-area');
   const svg = document.getElementById('edge-svg');
   
-  // 清除旧元素（保留 SVG 和 unassigned）
+  // 清除旧元素
   canvas.querySelectorAll('.node,.group').forEach(el => el.remove());
-  unassigned.querySelectorAll('.node.staff').forEach(el => el.remove());
 
   // 渲染群组
   for (const g of groups) {
@@ -258,15 +257,24 @@ function renderTopology() {
     canvas.appendChild(el);
   }
 
-  // 渲染节点
+  // 渲染节点（全部在 canvas 内，用绝对定位）
+  // 先计算可用区域，动态调整员工节点位置
+  const ch = canvas.offsetHeight || 600;
+  const cw = canvas.offsetWidth || 360;
+  const staffNodes = nodes.filter(n => n.type === 'staff' && !n.group_id);
+  const startY = Math.max(ch * 0.4, 200);
+  const gapX = Math.min(65, (cw - 40) / 5);
+  const gapY = Math.min(70, (ch - startY - 140) / 3);
+  
+  for (let i = 0; i < staffNodes.length; i++) {
+    staffNodes[i].x = 20 + (i % 5) * gapX;
+    staffNodes[i].y = Math.min(startY + Math.floor(i / 5) * gapY, ch - 130);
+  }
+  
   for (const n of nodes) {
-    if (n.group_id) continue; // 群组成员在群组内渲染
+    if (n.group_id) continue;
     const el = createNodeElement(n);
-    if (n.type === 'staff') {
-      unassigned.appendChild(el);
-    } else {
-      canvas.appendChild(el);
-    }
+    canvas.appendChild(el);
   }
 
   // 渲染群组内的员工
