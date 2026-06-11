@@ -382,9 +382,13 @@ document.addEventListener('touchend', e => {
   if (!touchDragNode) return;
   const nodeId = touchDragNode.getAttribute('data-node-id');
   const n = nodes.find(nd => nd.id === nodeId);
+  if (!n) { touchDragNode = null; return; }
   const clientX = e.changedTouches[0].clientX;
   const clientY = e.changedTouches[0].clientY;
+  // 关键：先隐藏拖着的节点，才能检测到下方的群组框
+  touchDragNode.style.display = 'none';
   const target = document.elementFromPoint(clientX, clientY);
+  touchDragNode.style.display = '';
   const groupEl = target?.closest('.group');
   
   if (groupEl && n.type === 'staff') {
@@ -399,15 +403,8 @@ document.addEventListener('touchend', e => {
       }
     }
   } else {
-    // 放在未分配区：取消分组
-    if (n.type === 'staff') {
-      n.group_id = null;
-      // 如果在群组中移出，恢复直连
-      const stillInGroup = nodes.some(nd => nd.group_id === n.group_id);
-      if (!stillInGroup) {
-        // 不需要特殊处理，重新渲染时会修复
-      }
-    }
+    // 拖回空白区：取消分组
+    if (n.type === 'staff') { n.group_id = null; }
   }
   
   touchDragNode.classList.remove('dragging');
