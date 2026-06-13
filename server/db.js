@@ -30,6 +30,7 @@ function createTeam(id, teamName, leader) {
     id, team_name: teamName, leader,
     architecture: null, verdict: null, survival_rate: null,
     radar_scores: null, crisis_passed: 0, message: null,
+    structure_type: null, failure_reasons: null, teaching_points: null,
     submitted_at: null, created_at: new Date().toISOString()
   });
   save();
@@ -47,7 +48,7 @@ function getSubmittedTeams() {
   return data.teams.filter(t => t.submitted_at).sort((a, b) => (b.submitted_at || '').localeCompare(a.submitted_at || ''));
 }
 
-function submitTeam(id, architecture, verdict, survivalRate, radarScores, crisisPassed, message) {
+function submitTeam(id, architecture, verdict, survivalRate, radarScores, crisisPassed, message, structureType, failureReasons, teachingPoints) {
   const t = data.teams.find(t => t.id === id);
   if (!t) return;
   t.architecture = JSON.stringify(architecture);
@@ -56,6 +57,9 @@ function submitTeam(id, architecture, verdict, survivalRate, radarScores, crisis
   t.radar_scores = JSON.stringify(radarScores);
   t.crisis_passed = crisisPassed ? 1 : 0;
   t.message = message;
+  t.structure_type = structureType || null;
+  t.failure_reasons = JSON.stringify(failureReasons || []);
+  t.teaching_points = JSON.stringify(teachingPoints || []);
   t.submitted_at = new Date().toISOString();
   save();
 }

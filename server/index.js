@@ -20,9 +20,17 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// 全局相位状态
+app.get('/healthz', (req, res) => {
+  res.json({ ok: true, service: 'campus-cafe-sandbox' });
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/dashboard/');
+});
+
+// Global phase state
 let currentPhase = 'building'; // building | crisis | verdict
-// 已入场团队（简化为内存计数，真实用db.submissions）
+// Joined team counter; submitted team details are stored in db.
 let joinedTeams = 0;
 
 // ==================== REST API ====================
@@ -78,7 +86,18 @@ app.post('/api/team/submit', (req, res) => {
   const result = engine.judge(architecture);
 
   // 持久化
-  db.submitTeam(team_id, architecture, result.verdict, result.survival_rate, result.radar_scores, result.crisis_passed, result.message);
+  db.submitTeam(
+    team_id,
+    architecture,
+    result.verdict,
+    result.survival_rate,
+    result.radar_scores,
+    result.crisis_passed,
+    result.message,
+    result.structure_type,
+    result.failure_reasons,
+    result.teaching_points
+  );
 
   // WebSocket 广播
   const team = db.getTeam(team_id);
@@ -88,7 +107,10 @@ app.post('/api/team/submit', (req, res) => {
     survival_rate: result.survival_rate,
     radar_scores: result.radar_scores,
     crisis_passed: result.crisis_passed,
-    message: result.message
+    message: result.message,
+    structure_type: result.structure_type,
+    failure_reasons: result.failure_reasons,
+    teaching_points: result.teaching_points
   });
   io.emit('BATTLE_LOG', {
     team_name: team.team_name,
@@ -102,7 +124,8 @@ app.post('/api/team/submit', (req, res) => {
 
   res.json({
     team_id, verdict: result.verdict, survival_rate: result.survival_rate,
-    radar_scores: result.radar_scores, crisis_passed: result.crisis_passed, message: result.message
+    radar_scores: result.radar_scores, crisis_passed: result.crisis_passed, message: result.message,
+    structure_type: result.structure_type, failure_reasons: result.failure_reasons, teaching_points: result.teaching_points
   });
 });
 
@@ -114,8 +137,12 @@ app.get('/api/dashboard/snapshot', (req, res) => {
     teams: teams.map(t => ({
       team_id: t.id, team_name: t.team_name, leader: t.leader,
       verdict: t.verdict, survival_rate: t.survival_rate,
+      architecture: t.architecture,
       radar_scores: t.radar_scores ? JSON.parse(t.radar_scores) : null,
       crisis_passed: !!t.crisis_passed, message: t.message,
+      structure_type: t.structure_type || null,
+      failure_reasons: t.failure_reasons ? JSON.parse(t.failure_reasons) : [],
+      teaching_points: t.teaching_points ? JSON.parse(t.teaching_points) : [],
       submitted_at: t.submitted_at
     })),
     avg_radar_scores: avgRadar

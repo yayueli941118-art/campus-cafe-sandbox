@@ -207,6 +207,16 @@ function toast(msg) {
   setTimeout(() => el.remove(), 2500);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
 // ==================== Page 1: 入局 ====================
 async function joinGame() {
   teamName = document.getElementById('input-team').value.trim();
@@ -595,11 +605,24 @@ function calcShopSpan() {
 }
 
 function buildArchitectureJSON() {
-  const archNodes = nodes.map(n => ({
-    id: n.id, label: n.label, type: n.type,
-    parent_id: n.type === 'staff' ? (n.group_id || 'shop_manager') : null,
-    group_id: n.group_id || null
+  const groupNodes = groups.map(g => ({
+    id: g.id,
+    label: g.label,
+    type: 'group',
+    parent_id: 'shop_manager',
+    group_id: null
   }));
+
+  const archNodes = [
+    ...nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+      parent_id: n.type === 'staff' ? (n.group_id || 'shop_manager') : null,
+      group_id: n.group_id || null
+    })),
+    ...groupNodes
+  ];
   
   // 重建边：店长→未分组员工，店长→群组
   const archEdges = [];
@@ -621,30 +644,37 @@ function buildArchitectureJSON() {
     }
   }
 
-  return { nodes: archNodes, edges: archEdges };
+  return {
+    nodes: archNodes,
+    edges: archEdges,
+    groups: groups.map(g => ({ id: g.id, label: g.label }))
+  };
 }
 
 async function submitArchitecture() {
   const shopSpan = calcShopSpan();
-  const gc = groups.length;
-  
-  // 提交前预览：预估生存率
+  const groupCount = groups.length;
+  const structureHint = shopSpan > 8
+    ? '\u76f4\u7ebf\u5236\u8fc7\u8f7d'
+    : (groupCount >= 3 && shopSpan <= 4 ? '\u77e9\u9635\u5236/\u654f\u6377\u7ed3\u6784' : (groupCount >= 2 ? '\u804c\u80fd\u5236\u8fc7\u6e21\u7ed3\u6784' : '\u76f4\u7ebf\u5236/\u6df7\u5408\u7ed3\u6784'));
+
   let estRate = 60;
-  let estMsg = '';
-  if (shopSpan > 8) { estRate = 40; estMsg = '⚠️ 管理幅度击穿！'; }
-  else if (gc >= 3 && shopSpan <= 3) { estRate = 85; estMsg = '✅ 矩阵重组优秀'; }
-  else { estRate = 60; estMsg = '🟡 基础存活线'; }
-  
-  const confirm = window.confirm(
-    '📊 提交预览\n\n' +
-    '店长幅度：' + shopSpan + ' (' + (shopSpan<=3?'🟢':shopSpan<=8?'🟡':'🔴') + ')\n' +
-    '群组数量：' + gc + ' 个\n' +
-    '预估生存率：约 ' + estRate + '%\n' +
-    '判定：' + estMsg + '\n\n' +
-    '确定提交？'
+  let estMsg = '\u57fa\u7840\u5b58\u6d3b\u7ebf';
+  if (shopSpan > 8) { estRate = 40; estMsg = '\u7ba1\u7406\u5e45\u5ea6\u51fb\u7a7f'; }
+  else if (groupCount >= 3 && shopSpan <= 4) { estRate = 85; estMsg = '\u77e9\u9635\u91cd\u7ec4\u6210\u578b'; }
+  else if (groupCount >= 2) { estRate = 72; estMsg = '\u804c\u80fd\u5206\u5de5\u521d\u6b65\u5f62\u6210'; }
+
+  const ok = window.confirm(
+    '\u63d0\u4ea4\u9884\u89c8\n\n' +
+    '\u5e97\u957f\u7ba1\u7406\u5e45\u5ea6\uff1a' + shopSpan + '\n' +
+    '\u5c0f\u7ec4\u6570\u91cf\uff1a' + groupCount + '\n' +
+    '\u7ed3\u6784\u7c7b\u578b\uff1a' + structureHint + '\n' +
+    '\u9884\u8ba1\u751f\u5b58\u7387\uff1a\u7ea6' + estRate + '%\n' +
+    '\u5224\u5b9a\uff1a' + estMsg + '\n\n' +
+    '\u786e\u8ba4\u63d0\u4ea4\u7ed3\u6784\u63a8\u6f14\uff1f'
   );
-  if (!confirm) return;
-  
+  if (!ok) return;
+
   const arch = buildArchitectureJSON();
   try {
     const res = await fetch('/api/team/submit', {
@@ -656,10 +686,10 @@ async function submitArchitecture() {
     if (res.ok) {
       showResult(data);
     } else {
-      toast(data.error || '提交失败');
+      toast(data.error || '\u63d0\u4ea4\u5931\u8d25');
     }
   } catch (e) {
-    toast('网络错误');
+    toast('\u7f51\u7edc\u9519\u8bef');
   }
 }
 
@@ -745,22 +775,33 @@ function showResult(data) {
   const rateEl = document.getElementById('rate-text');
   const msgEl = document.getElementById('result-msg');
   const radarEl = document.getElementById('radar-detail');
-  
+
   card.className = 'result-card ' + data.verdict;
   verdictEl.className = 'verdict ' + data.verdict;
   rateEl.className = 'rate ' + data.verdict;
-  
-  verdictEl.textContent = data.verdict === 'survive' ? '🎉 架构存活' : '💀 宣告破产';
+
+  verdictEl.textContent = data.verdict === 'survive' ? '\u7ed3\u6784\u5b58\u6d3b' : '\u5ba3\u544a\u7834\u4ea7';
   rateEl.textContent = data.survival_rate + '%';
   msgEl.textContent = data.message;
-  
-  if (data.radar_scores) {
-    const entries = Object.entries(data.radar_scores);
-    radarEl.textContent = entries.map(([k, v]) => k + ': ' + v).join('  |  ');
-  }
+
+  const failureReasons = Array.isArray(data.failure_reasons) ? data.failure_reasons : [];
+  const teachingPoints = Array.isArray(data.teaching_points) ? data.teaching_points : [];
+  const radarText = data.radar_scores
+    ? Object.entries(data.radar_scores).map(([k, v]) => escapeHtml(k) + ': ' + escapeHtml(v)).join('  |  ')
+    : '';
+
+  radarEl.innerHTML = `
+    <div style="margin:10px 0 6px;color:#00E5FF;font-weight:700">\u7ec4\u7ec7\u7ed3\u6784\uff1a${escapeHtml(data.structure_type || '--')}</div>
+    <div style="text-align:left;line-height:1.6;margin-top:8px">
+      <div style="color:#FFC107">\u8bca\u65ad\uff1a</div>
+      ${failureReasons.map(item => `<div>\u00b7 ${escapeHtml(item)}</div>`).join('')}
+      <div style="color:#00E5FF;margin-top:8px">\u77e5\u8bc6\u70b9\u590d\u76d8\uff1a</div>
+      ${teachingPoints.map(item => `<div>\u00b7 ${escapeHtml(item)}</div>`).join('')}
+    </div>
+    <div style="margin-top:10px;color:#666">${radarText}</div>
+  `;
 }
 
-// ==================== 危机轮询 ====================
 let crisisPollInterval = null;
 function startCrisisPolling() {
   crisisPollInterval = setInterval(async () => {

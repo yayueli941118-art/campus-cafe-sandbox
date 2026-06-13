@@ -317,43 +317,61 @@ function updateSummary(data) {
   document.getElementById('stat-bankrupt').textContent = data.bankrupt || 0;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function parseArchitectureInfo(team) {
+  let arch = null;
+  try {
+    arch = typeof team.architecture === 'string' ? JSON.parse(team.architecture) : team.architecture;
+  } catch {}
+  const nodes = arch?.nodes || [];
+  const groups = arch?.groups || nodes.filter(n => n.type === 'group');
+  const edges = arch?.edges || [];
+  const shopSpan = edges.filter(e => e.from === 'shop_manager').length || 0;
+  return { arch, nodes, groups, groupCount: groups.length, shopSpan };
+}
+
 function updateDashboard(teams, avgRadar) {
   if (!teams || teams.length === 0) return;
-  
-  // 更新雷达图
+
   if (avgRadar) {
     const values = [
-      avgRadar['决策效率'], avgRadar['沟通成本'], avgRadar['执行偏差'],
-      avgRadar['管理幅度'], avgRadar['响应速度'], avgRadar['冗余程度']
+      avgRadar['\u51b3\u7b56\u6548\u7387'], avgRadar['\u6c9f\u901a\u6210\u672c'], avgRadar['\u6267\u884c\u504f\u5dee'],
+      avgRadar['\u7ba1\u7406\u5e45\u5ea6'], avgRadar['\u54cd\u5e94\u901f\u5ea6'], avgRadar['\u5197\u4f59\u7a0b\u5ea6']
     ];
     radarChart.setOption({
-      series: [{ data: [{ value: values, name: '全班平均' }] }]
+      series: [{ data: [{ value: values, name: '\u5168\u73ed\u5e73\u5747' }] }]
     });
   }
-  
-  // 更新散点图
+
   scatterData = teams.map(t => {
-    const radar = t.radar_scores || {};
-    const groupCount = (t.architecture ? JSON.parse(t.architecture) : { groups: [] }).groups?.length || 
-      Math.round(Math.random() * 4 + 1);
-    const avgSpan = radar['管理幅度'] ? Math.round((100 - radar['管理幅度']) / 15 * 10 + 2) : Math.round(Math.random() * 8 + 2);
-    
+    const archInfo = parseArchitectureInfo(t);
+    const groupCount = archInfo.groupCount;
+    const avgSpan = archInfo.shopSpan;
+
     demolishData[t.team_name] = t;
-    
+
     return {
       value: [groupCount, avgSpan, t.team_name],
       itemStyle: { color: t.verdict === 'survive' ? '#00E5FF' : '#FF1744' }
     };
   });
-  
+
   scatterChart.setOption({
     series: [{ data: scatterData.map(d => ({
       value: [d.value[0], d.value[1], d.value[2]],
       itemStyle: d.itemStyle
     })), markLine: scatterOption.series[0].markLine, markArea: scatterOption.series[0].markArea }]
   });
-  
-  // 更新战报
+
   for (const t of teams) {
     const existing = battleLogs.find(l => l.team_id === t.team_id);
     if (!existing) {
@@ -377,24 +395,24 @@ function addBattleLog(team) {
 
 function renderLeaderboard(teams) {
   const container = document.getElementById('pk-leaderboard');
-  // 按生存率降序排列
   const ranked = [...teams].sort((a, b) => (b.survival_rate || 0) - (a.survival_rate || 0));
-  
+
   container.innerHTML = ranked.map((t, i) => {
     const verdict = t.verdict || 'bankrupt';
-    const rankEmoji = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1);
+    const rankEmoji = i === 0 ? 'TOP1' : i === 1 ? 'TOP2' : i === 2 ? 'TOP3' : '#' + (i + 1);
     const topClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
     const rate = t.survival_rate || 0;
-    const gc = t.architecture ? (typeof t.architecture === 'string' ? JSON.parse(t.architecture) : t.architecture).groups?.length || 0 : 0;
-    const verdictIcon = verdict === 'survive' ? '🟢' : '💀';
-    
+    const archInfo = parseArchitectureInfo(t);
+    const verdictIcon = verdict === 'survive' ? '\u5b58\u6d3b' : '\u7834\u4ea7';
+
     return `<div class="pk-card ${verdict} ${topClass}">
-      <span class="rank-badge">${rankEmoji}</span>
-      <div class="team-name">${t.team_name}</div>
+      <span class="rank-badge" style="font-size:12px;top:6px">${rankEmoji}</span>
+      <div class="team-name">${escapeHtml(t.team_name)}</div>
       <div class="team-rate">${rate}%</div>
       <div class="rate-bar"><div class="rate-bar-fill" style="width:${rate}%"></div></div>
       <div class="team-meta">
-        <span>${gc}组</span>
+        <span>${archInfo.groupCount}\u7ec4</span>
+        <span>${escapeHtml(t.structure_type || '--')}</span>
         <span class="verdict-icon">${verdictIcon}</span>
       </div>
     </div>`;
@@ -405,26 +423,34 @@ function showDrilldown(pointData) {
   if (!pointData) return;
   const team = demolishData[pointData.value[2]];
   if (!team) return;
-  
+
+  const archInfo = parseArchitectureInfo(team);
+  const failureReasons = Array.isArray(team.failure_reasons) ? team.failure_reasons : [];
+  const teachingPoints = Array.isArray(team.teaching_points) ? team.teaching_points : [];
+
   document.getElementById('drill-name').textContent = team.team_name;
-  document.getElementById('drill-info').innerHTML = 
-    `生存率: ${team.survival_rate}% | 判定: ${team.verdict === 'survive' ? '存活' : '破产'}<br>危机: ${team.crisis_passed ? '通过' : '未通过'} | ${team.message}`;
-  
-  // 架构缩略图
+  document.getElementById('drill-info').innerHTML =
+    `\u751f\u5b58\u7387: ${escapeHtml(team.survival_rate)}% | \u7ed3\u6784: ${escapeHtml(team.structure_type || '--')}<br>
+    \u5371\u673a: ${team.crisis_passed ? '\u901a\u8fc7' : '\u672a\u901a\u8fc7'} | ${escapeHtml(team.message || '')}<br>
+    <span style="color:#FFC107">\u8bca\u65ad</span>: ${failureReasons.map(escapeHtml).join(' / ')}<br>
+    <span style="color:#00E5FF">\u590d\u76d8</span>: ${teachingPoints.map(escapeHtml).join(' / ')}`;
+
   const topoEl = document.getElementById('drill-topo');
   topoEl.innerHTML = '';
-  try {
-    const arch = typeof team.architecture === 'string' ? JSON.parse(team.architecture) : team.architecture;
-    if (arch && arch.nodes) {
-      const nodeTypes = {};
-      arch.nodes.forEach(n => { nodeTypes[n.type] = (nodeTypes[n.type] || 0) + 1; });
-      const summary = Object.entries(nodeTypes).map(([k, v]) => 
-        `<span class="mini-node ${k}">${k==='manager'?'店长':k==='staff'?'员工':k}: ${v}</span>`
-      ).join('');
-      topoEl.innerHTML = summary || '架构数据加载中…';
-    }
-  } catch { topoEl.innerHTML = '架构数据异常'; }
-  
+  if (archInfo.nodes.length) {
+    const managerCount = archInfo.nodes.filter(n => n.type === 'manager').length;
+    const staffCount = archInfo.nodes.filter(n => n.type === 'staff').length;
+    const groupLabels = archInfo.groups.map(g => escapeHtml(g.label || g.id)).join('\u3001');
+    topoEl.innerHTML = `
+      <span class="mini-node manager">\u5e97\u957f: ${managerCount}</span>
+      <span class="mini-node group">\u5c0f\u7ec4: ${archInfo.groupCount}</span>
+      <span class="mini-node staff">\u5458\u5de5: ${staffCount}</span>
+      <span class="mini-node group">${groupLabels || '\u672a\u5206\u7ec4'}</span>
+    `;
+  } else {
+    topoEl.innerHTML = '\u7ed3\u6784\u6570\u636e\u52a0\u8f7d\u4e2d...';
+  }
+
   document.getElementById('drilldown').style.display = 'block';
 }
 
